@@ -1,0 +1,4 @@
+id,name,read,pattern,sequence,feature_type
+ICGC_365_365_07,ICGC_365_365_07,R2,^(BC),GTCAACTCTTTAGCG,Antibody Capture
+ICGC_365_14_2944,ICGC_365_14_2944,R2,^(BC),TGATGGCCTATTGGG,Antibody Capture
+ICGC_365_15_194,ICGC_365_15_194,R2,^(BC),TTCCGCCTCTCTTTG,Antibody Capture

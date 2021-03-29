@@ -1,0 +1,5 @@
+fastqs,sample,library_type
+/scratch/devel/rmassoni/RICHTER/current/1-cellranger_mapping/projects/BCLLATLAS_10/jobs/r65huxjg_g0itbe2k/fastq/cDNA/lane2,r65huxjg_g0itbe2k,Gene Expression
+/scratch/devel/rmassoni/RICHTER/current/1-cellranger_mapping/projects/BCLLATLAS_10/jobs/r65huxjg_g0itbe2k/fastq/cDNA/lane1,r65huxjg_g0itbe2k,Gene Expression
+/scratch/devel/rmassoni/RICHTER/current/1-cellranger_mapping/projects/BCLLATLAS_10/jobs/r65huxjg_g0itbe2k/fastq/HTO/lane2,r65huxjg_g0itbe2k_HTO,Antibody Capture
+/scratch/devel/rmassoni/RICHTER/current/1-cellranger_mapping/projects/BCLLATLAS_10/jobs/r65huxjg_g0itbe2k/fastq/HTO/lane1,r65huxjg_g0itbe2k_HTO,Antibody Capture
