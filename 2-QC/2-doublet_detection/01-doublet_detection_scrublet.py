@@ -33,7 +33,7 @@ counts_path = "../../1-cellranger_mapping/projects/{}/jobs/{}/{}/outs/filtered_f
 barcodes_path = "../../1-cellranger_mapping/projects/{}/jobs/{}/{}/outs/filtered_feature_bc_matrix/barcodes.tsv.gz".format(subproject, gem_id, gem_id) 
 counts_matrix = scipy.io.mmread(counts_path).T.tocsc()
 barcodes_df = pd.read_csv(barcodes_path, header = None)
-metadata = pd.read_csv("../../1-cellranger_mapping/data/tonsil_atlas_metadata.csv")
+metadata = pd.read_csv("../../1-cellranger_mapping/data/richter_metadata.csv")
 
 
 # Run scrublet
@@ -42,6 +42,7 @@ if lib_type == "not_hashed":
 	expected_doublet_rate = 0.04
 elif lib_type == "hashed_cdna" or lib_type == "hashed_hto":
 	expected_doublet_rate = 0.16
+print("The expected doublet rate is {}".format(expected_doublet_rate))
 scrub = scr.Scrublet(counts_matrix, expected_doublet_rate = expected_doublet_rate)
 doublet_scores, predicted_doublets = scrub.scrub_doublets(min_counts = 2, min_cells = 3, min_gene_variability_pctl = 75, n_prin_comps = 30)
 doublet_scores = np.round(doublet_scores, decimals = 3)
