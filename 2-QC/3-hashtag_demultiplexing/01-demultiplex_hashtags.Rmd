@@ -21,9 +21,7 @@ title: "`r title`"
 
 # Introduction
 
-In this project, we aim to create a tonsil cell atlas as part of [The Human Cell Atlas](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5762154/pdf/elife-27041.pdf) consortium. To detect doublets, we separated cells coming from the same tonsil into different tubes ("batches"), and we labeled them with a batch-specific hashtag oligonucleotides (HTO), as described in [Stoeckius et al.](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-018-1603-1). These HTO are cross-linked with antibodies that bind to ubiquitous cell surface proteins. We then multiplexed all batches and processed them into the same 10X Chromium Chip Channel ([GEM well](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/glossary)), hence sequencing together HTO and single-cell gene expression reads (cDNA). Finally, we can detect inter-batch doublets as those cell barcodes that have high counts of two or more HTO.
-
-The objective of this notebook is to demultiplex the barcodes (cells) back to its original batch to discard doublets and negative cells.
+The objective of this notebook is to demultiplex the barcodes (cells) back to its original sample. In addition, we will discard doublets and negative cells.
 
 
 ## Load packages
@@ -40,7 +38,7 @@ library(tidyverse)
 ```{r}
 # Paths
 path_to_data <- str_c(
-  "scRNA-seq/1-cellranger_mapping/projects/",
+  "1-cellranger_mapping/projects/",
   subproject,
   "/jobs/",
   gem_id,
@@ -51,7 +49,7 @@ path_to_data <- str_c(
 path_to_data <- here::here(path_to_data)
 print(path_to_data)
 path_to_scrublet <- here::here(str_c(
-  "scRNA-seq/results/tables/scrublet/scrublet_doublet_prediction-",
+  "results/tables/scrublet/scrublet_doublet_prediction-",
   subproject,
   "-",
   gem_id,
@@ -60,7 +58,7 @@ path_to_scrublet <- here::here(str_c(
 
 
 # Functions
-source(here::here("scRNA-seq/bin/utils.R"))
+source(here::here("bin/utils.R"))
 ```
 
 
@@ -76,26 +74,19 @@ matrices <- Read10X(data.dir = path_to_data)
 To demultiplex, we will follow the ["Demultiplexing with hashtag oligos (HTOs)" pipeline from Seurat](https://satijalab.org/seurat/v3.0/hashing_vignette.html):
 
 ```{r}
-# Clean
-rownames(matrices$`Antibody Capture`) <- str_remove(
-  rownames(matrices$`Antibody Capture`),
-  "Total-seq-"
-)
-
-
 # Setup Seurat object
-tonsil <- CreateSeuratObject(counts = matrices$`Gene Expression`)
+seurat <- CreateSeuratObject(counts = matrices$`Gene Expression`)
 
 
 # Add HTO as an independent assay
-tonsil[["HTO"]] <- CreateAssayObject(counts = matrices$`Antibody Capture`)
-tonsil <- NormalizeData(tonsil, assay = "HTO", normalization.method = "CLR")
+seurat[["HTO"]] <- CreateAssayObject(counts = matrices$`Antibody Capture`)
+seurat <- NormalizeData(seurat, assay = "HTO", normalization.method = "CLR")
 
 
 # Demultiplex
-tonsil <- HTODemux(tonsil, assay = "HTO", positive.quantile = 0.99)
-new_barcodes <- str_c(gem_id, colnames(tonsil), sep = "_")
-tonsil <- RenameCells(tonsil, new.names = new_barcodes)
+seurat <- HTODemux(seurat, assay = "HTO", positive.quantile = 0.99)
+new_barcodes <- str_c(gem_id, colnames(seurat), sep = "_")
+seurat <- RenameCells(seurat, new.names = new_barcodes)
 ```
 
 
@@ -106,12 +97,12 @@ We can visualize the results as ridge plots and heatmaps:
 ## Ridge plots
 
 ```{r fig.height=10, fig.width=14}
-table(tonsil$HTO_classification.global)
-Idents(tonsil) <- "HTO_maxID"
+table(seurat$HTO_classification.global)
+Idents(seurat) <- "HTO_maxID"
 RidgePlot(
-  object = tonsil, 
+  object = seurat, 
   assay = "HTO", 
-  features = rownames(tonsil[["HTO"]]), 
+  features = rownames(seurat[["HTO"]]), 
   ncol = 3
 )
 ```
@@ -121,29 +112,10 @@ The previous step classified each cell in one or more batch. We can see the leve
 ## Heatmaps
 
 ```{r}
-HTOHeatmap(tonsil, assay = "HTO", ncells = 5000)
+HTOHeatmap(seurat, assay = "HTO", ncells = 5000)
 ```
 
 In this heatmap, each column represents a 10X barcode, and each row the expression of a batch-specific HTO. We can visualize singlets, doublets and negative cells (ie not labelled by any HTO). We strive for a similar number of cells across batches, as this increases our ability to identify doublets.
-
-
-## tSNE
-
-We can visualize the tSNE embedding of cells in HTO space. A clear separation of clusters would indicate a good labeling:
-
-```{r}
-tonsil_subset <- subset(
-  tonsil,
-  subset = HTO_classification.global == "Negative",
-  invert = TRUE
-)
-DefaultAssay(tonsil_subset) <- "HTO"
-tonsil_subset <- tonsil_subset %>%
-  ScaleData(features = rownames(tonsil_subset), verbose = TRUE) %>%
-  RunPCA(features = rownames(tonsil_subset), approx = FALSE) %>%
-  RunTSNE(dims = 1:nrow(tonsil_subset), perplexity = 100)
-DimPlot(tonsil_subset, group.by = "HTO_classification.global")
-```
 
 
 ## Number of cells
@@ -153,14 +125,14 @@ Let us visualize the numbers of singlets/doublets/negative:
 ```{r}
 # Absolute frequencies
 hto_levels <- c("Singlet", "Doublet", "Negative")
-tonsil_df <- tonsil@meta.data %>%
+seurat_df <- seurat@meta.data %>%
   group_by(HTO_classification.global) %>% 
   summarise(count = n()) %>%
   mutate(percentage = (count / sum(count)) * 100) %>%
   mutate(HTO_classification.global = factor(
     HTO_classification.global, 
     levels = hto_levels))
-tonsil_count_gg <- tonsil_df %>% 
+seurat_count_gg <- seurat_df %>% 
   ggplot(aes(HTO_classification.global, count, fill = HTO_classification.global)) +
   geom_col() +
   geom_text(aes(label = count), 
@@ -171,11 +143,11 @@ tonsil_count_gg <- tonsil_df %>%
   theme(axis.text.x = element_text(size = 11), 
         plot.title = element_text(hjust = 0.5),
         legend.position = "none")
-tonsil_count_gg
+seurat_count_gg
 
 
 # Percentages
-tonsil_pct_gg <- tonsil_df %>% 
+seurat_pct_gg <- seurat_df %>% 
   ggplot(aes(x = "", y = percentage, fill = HTO_classification.global)) +
     geom_bar(width = 1, stat = "identity") +
     geom_text(
@@ -196,10 +168,9 @@ tonsil_pct_gg <- tonsil_df %>%
       legend.title = element_blank(),
       legend.text = element_text(size = 11)
     )
-tonsil_pct_gg
+seurat_pct_gg
 ```
 
-From the 10X protocols and our experience, we know that there is a linear relationship between the percentage of doublets and the target number of cells per 10X Chromium Chip Channel (GEM well); with a slope of 8% doublets for 10,000 cells. Thus, if we do not use cell hashing we normally aim for 5,000 cells, as 4% doublets will not have a large impact in our analysis. However, detecting doublets with hashing allowed us to overload the 10X lane and get a higher throughput.
 
 
 # Scrublet accuracy
@@ -213,15 +184,15 @@ scrublet_df <- read_csv(path_to_scrublet)
 
 # Add scrublet doublet score to metadata
 scrublet_df$barcodes <- str_c(gem_id, scrublet_df$barcodes, sep = "_")
-if (all(scrublet_df$barcodes == colnames(tonsil))) {
+if (all(scrublet_df$barcodes == colnames(seurat))) {
   warning("barcodes are equal")
-  tonsil$scrublet_doublet_scores <- scrublet_df$scrublet_doublet_scores
-  tonsil$scrublet_doublet_scores_scaled <- scale(
+  seurat$scrublet_doublet_scores <- scrublet_df$scrublet_doublet_scores
+  seurat$scrublet_doublet_scores_scaled <- scale(
     scrublet_df$scrublet_doublet_scores,
     center = TRUE,
     scale = TRUE
   )
-  tonsil$scrublet_predicted_doublet <- scrublet_df$scrublet_predicted_doublet
+  seurat$scrublet_predicted_doublet <- scrublet_df$scrublet_predicted_doublet
   
 } else{
   warning("barcodes are not equal")
@@ -229,9 +200,9 @@ if (all(scrublet_df$barcodes == colnames(tonsil))) {
 
 
 # Plot doublet score distribution
-score_gg <- tonsil@meta.data %>%
+score_gg <- seurat@meta.data %>%
     mutate(HTO_classification.global = factor(
-      tonsil$HTO_classification.global,
+      seurat$HTO_classification.global,
       levels = c("Singlet", "Doublet", "Negative")
     )) %>% 
     ggplot(aes(
@@ -244,20 +215,21 @@ score_gg <- customized_boxplot(score_gg)
 score_gg
 ```
 
+
 # Quantify the signal-to-noise ratio (SNR)
 
 We quantify the SNR in the cell hashing experiment by dividing, for each cell, the first and second highest HTO normalized counts. In the case of singlets we should expect a clear deviation from 1:
 
 ```{r}
-tonsil$hashing_snr <- purrr::map_dbl(colnames(tonsil), function(x) {
-  signal <- tonsil[["HTO"]]@data[tonsil$HTO_maxID[x], x]
-  noise <- tonsil[["HTO"]]@data[tonsil$HTO_secondID[x], x]
+seurat$hashing_snr <- purrr::map_dbl(colnames(seurat), function(x) {
+  signal <- seurat[["HTO"]]@data[seurat$HTO_maxID[x], x]
+  noise <- seurat[["HTO"]]@data[seurat$HTO_secondID[x], x]
   snr <- (signal + 0.1) / (noise + 0.1)
   snr
 })
-snr_gg <- tonsil@meta.data %>%
+snr_gg <- seurat@meta.data %>%
     mutate(HTO_classification.global = factor(
-      tonsil$HTO_classification.global,
+      seurat$HTO_classification.global,
       levels = c("Singlet", "Doublet", "Negative")
     )) %>% 
     ggplot(aes(
@@ -274,7 +246,7 @@ snr_gg
 # Save demultiplexed Seurat objects
 
 ```{r}
-saveRDS(tonsil, save_object_path)
+saveRDS(seurat, save_object_path)
 ```
 
 
