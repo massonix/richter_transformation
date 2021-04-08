@@ -38,14 +38,17 @@ library(tidyverse)
 
 ```{r}
 # Paths
-path_to_not_hashed <- here::here("scRNA-seq/results/tables/cellranger_mapping/cellranger_mapping_metrics_not_hashed.csv")
-path_to_hashed <- here::here("scRNA-seq/results/tables/cellranger_mapping/cellranger_mapping_metrics_hashed.csv")
-path_to_donor_metadata <- here::here("data/tonsil_atlas_donor_metadata.csv")
-path_to_proj_metadata <- here::here("scRNA-seq/1-cellranger_mapping/data/tonsil_atlas_metadata.csv")
+path_to_not_hashed <- here::here("results/tables/cellranger_mapping/cellranger_mapping_metrics_not_hashed.csv")
+path_to_hashed <- here::here("results/tables/cellranger_mapping/cellranger_mapping_metrics_hashed.csv")
+path_to_proj_metadata <- here::here("1-cellranger_mapping/data/richter_metadata.csv")
 
 
 # Functions
-source(here::here("scRNA-seq/bin/utils.R"))
+source(here::here("bin/utils.R"))
+
+
+# Colors
+cols <- c("#cb3b25", "#b930df")
 ```
 
 
@@ -57,8 +60,7 @@ We have two different datasets (hashed and not hashed). The hashed dataset has a
 # Load
 qc_not_hashed <- read_csv(path_to_not_hashed, col_names = TRUE)
 qc_hashed <- read_csv(path_to_hashed, col_names = TRUE)
-donor_metadata <- read_csv(path_to_donor_metadata, col_names = TRUE)
-tonsil_metadata <- read_csv(path_to_proj_metadata, col_names = TRUE)
+metadata <- read_csv(path_to_proj_metadata, col_names = TRUE)
 
 
 # Clean
@@ -79,18 +81,17 @@ for (col in colnames(qc)) {
   }
 }
 qc$type <- factor(qc$type, levels = c("not_hashed", "hashed"))
-library_names <- tonsil_metadata$library_name
-names(library_names) <- tonsil_metadata$gem_id
+library_names <- metadata$library_name
+names(library_names) <- metadata$gem_id
+library_names <- library_names[!str_detect(library_names, "HTO")]
 qc$library_name <- library_names[qc$gem_id]
 print("QC summary table")
 DT::datatable(qc)
 
-print("Donor metadata")
-DT::datatable(donor_metadata)
-
 print("Libraries metadata")
-DT::datatable(tonsil_metadata)
+DT::datatable(metadata)
 ```
+
 
 # Overall statistics
 
@@ -144,11 +145,6 @@ $$Q = -10\log10(p)$$
 Where p is the probability of the base being wrongly called. Thus, bases with a high Q are highly reliable.
 
 ```{r fig.height=18}
-# Sequencing QC
-cols <- c("#cb3b25", "#b930df")
-
-
-# Q30
 q30_vars <- str_subset(colnames(qc), "Q3")
 q30_gg <- purrr::map(q30_vars, function(var) {
   selected_qc <- qc[qc[[var]] < 85, ]
@@ -193,22 +189,6 @@ mapping_qc_gg <- purrr::map(mapping_qc_vars, function(var) {
           axis.title = element_text(size = 13),
           axis.text = element_text(size = 13, color = "black"))
 })
-selected_qc <- qc[(qc$type == "not_hashed" & 
-                   qc$Reads_Mapped_Confidently_to_Genome < 50) |
-                  (qc$type == "hashed" & 
-                   qc$Reads_Mapped_Confidently_to_Genome < 75), ]
-mapping_qc_gg[[1]] <- mapping_qc_gg[[1]] +
-  geom_text_repel(data = selected_qc, aes(label = library_name), color = "black")
-selected_qc <- qc[qc$type == "not_hashed" &
-                  qc$Reads_Mapped_Confidently_to_Intronic_Regions < 12.5, ]
-mapping_qc_gg[[3]] <- mapping_qc_gg[[3]] +
-  geom_text_repel(data = selected_qc, aes(label = library_name), color = "black")  
-selected_qc <- qc[(qc$type == "not_hashed" &
-                   qc$Reads_Mapped_Confidently_to_Exonic_Regions < 25) |
-                  (qc$type == "hashed" &
-                   qc$Reads_Mapped_Confidently_to_Exonic_Regions < 40), ]
-mapping_qc_gg[[4]] <- mapping_qc_gg[[4]] +
-  geom_text_repel(data = selected_qc, aes(label = library_name), color = "black")
 
 
 # mapping_qc_gg
