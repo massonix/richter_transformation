@@ -21,7 +21,12 @@ title: "`r title`"
 
 # Introduction
 
-The objective of this notebook is to demultiplex the barcodes (cells) back to its original sample. In addition, we will discard doublets and negative cells.
+We had problems to demultiplex the cells from the patient ICGC_3299. This is because a specific  sample (ICGC_3299_19_2768B) does not contain any counts for its corresponding hashtag oligonucleotide (HTO). This can be due to the following challenges:
+
+- The labeling of this sample didn't work because the antibody was degraded or did not function properly. In this case our dataset can have a considerable number of cells of this sample, which can challenge interpretation if we cannot assign them to their original condition properly.
+- There were too few cells to tag, so our dataset has no cells which belong to this condition. In this case, we can safely proceed with our analysis.
+
+Here, we will exclude the HTO reads of this sample and demultiplex the rest to shed light into which of these two scenarios we are in.
 
 
 ## Load packages
@@ -75,7 +80,9 @@ To demultiplex, we will follow the ["Demultiplexing with hashtag oligos (HTOs)" 
 seurat <- CreateSeuratObject(counts = matrices$`Gene Expression`)
 
 
-# Add HTO as an independent assay
+# Add HTO as an independent assay, eliminating ICGC_3299_19_2768B
+selected_rows <- rownames(matrices$`Antibody Capture`) != "ICGC_3299_19_2768B"
+matrices$`Antibody Capture` <- matrices$`Antibody Capture`[selected_rows, ] 
 seurat[["HTO"]] <- CreateAssayObject(counts = matrices$`Antibody Capture`)
 seurat <- NormalizeData(seurat, assay = "HTO", normalization.method = "CLR")
 
