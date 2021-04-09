@@ -52,7 +52,7 @@ cols <- c("#cb3b25", "#b930df")
 ```
 
 
-## Load data
+## Load data    
 
 We have two different datasets (hashed and not hashed). The hashed dataset has additional variables related to the hashtag oligonucleotide (HTO) mapping.
 
