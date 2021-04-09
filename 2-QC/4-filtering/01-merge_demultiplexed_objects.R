@@ -30,7 +30,7 @@ print("Merging Seurat objects...")
 seurat_hashed <- seurat_list[[1]]
 for (i in 2:length(seurat_list)) {
   print(gem_ids[i])
-  seurat_hashed <- merge(x = tonsil_hashed, y = seurat_list[[i]])
+  seurat_hashed <- merge(x = seurat_hashed, y = seurat_list[[i]])
   seurat_list[[i]] <- NA
 }
 rm(seurat_list)
