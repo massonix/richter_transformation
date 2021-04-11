@@ -15,8 +15,6 @@ knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center',
 options(width = 1200)
 ```
 
-TODO: parse metadata for each sample (excel file    )
-
 
 # Introduction
 
@@ -40,7 +38,7 @@ library(tidyverse)
 # Paths
 path_to_obj <- here::here("results/R_objects/2.seurat_unfiltered.rds")
 path_to_project_metadata <- here::here("1-cellranger_mapping/data/richter_metadata.csv")
-path_to_donor_metadata <- here::here("")
+path_to_sample_metadata <- here::here("data/sample_metadata.csv")
 path_to_save <- here::here("results/R_objects/3.seurat_filtered.rds")
 
 
@@ -67,11 +65,53 @@ seurat
 
 
 # Read project and donor metadata
-metadata_df <- read_csv(path_to_project_metadata)
-DT::datatable(metadata_df)
-# donor_id_df <- read_csv(path_to_donor_metadata)
-# DT::datatable(donor_id_df)
+project_metadata_df <- read_csv(path_to_project_metadata)
+DT::datatable(project_metadata_df)
+sample_metadata_df <- read_csv(path_to_sample_metadata)
+DT::datatable(sample_metadata_df)
 ```
+
+
+## Add sample metadata
+
+```{r}
+sample_metadata_df$donor_id <- as.character(sample_metadata_df$donor_id)
+seurat$donor_id <- seurat$donor_id %>%
+  str_remove("ICGC_") %>%
+  str_remove("^0")
+seurat$subproject <- ifelse(seurat$is_hashed, "BCLLATLAS_10", "BCLLATLAS_29")
+seurat$sample_id <- seurat$hash.ID
+singlets <- colnames(seurat)[!(seurat$hash.ID %in% c("Negative", "Doublet"))]
+seurat <- subset(seurat, cells = singlets)
+seurat$sample_id <- seurat$sample_id %>%
+  str_remove("(ICGC-012-|ICGC-019|ICGC-365-|ICGC-3299-)") %>%
+  str_remove("^-")
+seurat$sample_id[seurat$sample_id == "NA"] <- seurat$library_name[seurat$sample_id == "NA"] 
+seurat$sample_id <- str_replace(seurat$sample_id, "(-|_)", "/")
+seurat$sample_id[seurat$sample_id == "365/07"] <- "365-07"
+seurat$sample_id[seurat$sample_id == "19/06"] <- "19-06"
+seurat$sample_id[seurat$sample_id == "19/12"] <- "19-12"
+sample_metadata_df[sample_metadata_df$sample_id == "19/2768B", ]
+
+
+test_identifiers <- all(unique(sample_metadata_df$sample_id) %in% unique(sample_metadata_df$sample_id))
+if (test_identifiers) {
+  sample_metadata_df <- select(sample_metadata_df, - "donor_id")
+  new_metadata <- seurat@meta.data %>%
+    left_join(sample_metadata_df, by = "sample_id") %>%
+    as.data.frame()
+  rownames(new_metadata) <- colnames(seurat)
+  seurat@meta.data <- new_metadata
+
+} else {
+  stop("Identifiers are different!")
+}
+
+
+# Remove hashing-specific columns
+TODO
+```
+
 
 
 # Singlets vs Negatives
