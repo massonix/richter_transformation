@@ -1,4 +1,4 @@
-donor_id,sample_id,tissue,time_point,description,sampling_time
+donor_id,sample_id,tissue,time_point,sample_description,sampling_time
 365,365-07,PB,T2,relapse1_post-R-Brenda,7
 365,14/2944,PB,NA,relapse2_post-RFCM,4
 365,15/194,LN,T3,richter_post-ofatu-duvelisib,4
