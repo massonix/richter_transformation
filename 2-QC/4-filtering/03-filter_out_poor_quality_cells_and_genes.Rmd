@@ -47,12 +47,10 @@ source(here::here("bin/utils.R"))
 
 
 # Thresholds
-min_lib_size <- 
-max_lib_size <- 
-min_n_genes <- 
-max_n_genes <-
-max_pct_mt <- 
-min_cells <- 
+min_lib_size <- 900
+min_n_genes <- 200
+max_pct_mt <- 30
+min_cells <- 3
 ```
 
 
@@ -109,64 +107,9 @@ if (test_identifiers) {
 
 
 # Remove hashing-specific columns
-TODO
-```
-
-
-
-# Singlets vs Negatives
-
-To start with, let us compare the QC metrics distribution between "Negative" and "Singlets". We want to verify that Negative cells are indeed empty droplets:
-
-```{r}
-# Calculate percentage of mitochondrial and ribosomal expression
-seurat$pct_mt <- PercentageFeatureSet(seurat, pattern = "^MT-")
-seurat$pct_ribosomal <- PercentageFeatureSet(
-  seurat,
-  pattern = "^RPS"
-)
-
-
-# Plot
-vars <- c("nCount_RNA", "nFeature_RNA", "pct_mt")
-y_labs <- c(
-  "Library Size (total UMI)",
-  "Number of Detected Genes",
-  "% mitochondrial expression"
-)
-neg_vs_singl_ggs <- purrr::map2(vars, y_labs, function(x, y_lab) {
-  seurat@meta.data %>%
-    dplyr::filter(HTO_classification.global != "Doublet") %>%
-    dplyr::mutate(HTO_classification.global = factor(
-      HTO_classification.global,
-      levels = c("Singlet", "Negative")
-    )) %>% 
-    ggplot(aes_string(
-        "HTO_classification.global",
-        x,
-        fill = "HTO_classification.global"
-      )) +
-      geom_boxplot() +
-      labs(x = "", y = y_lab) +
-      theme_bw() +
-      theme(axis.text.x = element_text(size = 11),
-            axis.title.y = element_text(size = 13),
-            legend.position = "none")
-})
-neg_vs_singl_ggs[[1]] +
-  scale_y_log10()
-neg_vs_singl_ggs[[2]] +
-  scale_y_log10()
-neg_vs_singl_ggs[[3]]
-```
-
-
-As we can see, "Negative" cell barcodes have clearly less total UMI and detected genes, so we can proceed to filter them out:
-
-```{r}
-Idents(seurat) <- "HTO_classification.global"
-seurat <- subset(seurat, idents = c("Singlet", "Doublet"))
-seurat
+removed_vars <- c("HTO_maxID", "HTO_secondID", "HTO_margin", "HTO_classification",
+                  "HTO_classification.global")
+seurat@meta.data <- seurat@meta.data[, !(colnames(seurat@meta.data) %in% removed_vars)]
 ```
 
 
@@ -180,6 +123,7 @@ First, we want to see how the main QC variables distribute across samples. This 
 ```{r}
 # Calculate mean SNR
 snr_means_df <- seurat@meta.data %>%
+  dplyr::filter(is_hashed) %>%
   dplyr::group_by(library_name) %>%
   dplyr::summarise(
     mean_snr = round(mean(hashing_snr), 2),
@@ -187,14 +131,16 @@ snr_means_df <- seurat@meta.data %>%
   ) %>%
   dplyr::arrange(desc(mean_snr))
 DT::datatable(snr_means_df)
+
+
 # Plot SNR distribution
 breaks <- c(0, 2.5, 5, 7.5)
 snr_gg <- seurat@meta.data %>%
-  dplyr::filter(HTO_classification.global == "Singlet") %>%
+  dplyr::filter(is_hashed) %>%
   horizontal_boxplot(
     categorical_var = "library_name",
     continuous_var = "hashing_snr",
-    fill = "hospital",
+    fill = "donor_id",
     ylab = "Signal-to-Noise (hashing)"
   ) +
   scale_y_continuous(limits = c(0, 7.5), breaks = breaks)
@@ -206,25 +152,37 @@ snr_gg
 
 ```{r}
 # Calculate mean library size
-n_features_means_df <- seurat@meta.data %>%
-  dplyr::group_by(library_name) %>%
-  dplyr::summarise(
-    mean_n_features = round(mean(nFeature_RNA), 2),
-    sd_n_features = round(sd(nFeature_RNA), 2)) %>%
-  dplyr::arrange(mean_n_features)
-DT::datatable(n_features_means_df)
+seurat_list <- SplitObject(seurat, split.by = "donor_id")
+n_features_means_dfs <- purrr::map(seurat_list, function(seurat_obj) {
+  df <- seurat_obj@meta.data %>%
+    dplyr::group_by(time_point, sample_id) %>%
+    dplyr::summarise(
+      mean_n_features = round(mean(nFeature_RNA), 2),
+      sd_n_features = round(sd(nFeature_RNA), 2)) %>%
+    dplyr::arrange(time_point)
+  df
+})
+n_features_means_dfs
+
+
 # Plot library size distribution
-n_features_gg <- seurat@meta.data %>%
-  dplyr::filter(HTO_classification.global == "Singlet") %>%
-    horizontal_boxplot(
-    categorical_var = "library_name",
-    continuous_var = "nFeature_RNA",
-    fill = "hospital",
-    ylab = "Number of Detected Genes",
-    decreasing = TRUE
-  ) +
-  scale_y_log10()
-n_features_gg
+n_features_ggs <- purrr::map(names(seurat_list), function(x) {
+  p <- seurat_list[[x]]@meta.data %>%
+    ggplot(aes(time_point, nFeature_RNA, fill = subproject)) +
+      geom_violin() +
+      scale_y_log10() +
+      labs(title = x, x = "", y = "Number of Detected Genes") +
+      theme_bw() +
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 13),
+        axis.text = element_text(size = 11),
+        axis.title = element_text(size = 13),
+        legend.title = element_blank()
+      ) 
+  p
+})
+names(n_features_ggs) <- names(seurat_list)
+n_features_ggs
 ```
 
 
@@ -241,8 +199,7 @@ lib_size_hist <- seurat@meta.data %>%
   plot_histogram_qc(x = "nCount_RNA", x_lab = "Library Size (log10(total UMI))") +
   geom_vline(xintercept = min_lib_size, linetype = "dashed", color = "red")
 lib_size_hist1 <- lib_size_hist +
-    scale_x_log10() +
-    geom_vline(xintercept = max_lib_size, linetype = "dashed", color = "red")
+    scale_x_log10()
 lib_size_hist2 <- lib_size_hist +
     scale_x_continuous(limits = c(0, 4000)) +
     xlab("Library Size (total UMI)") +
@@ -256,8 +213,7 @@ lib_size_hist1 + lib_size_hist2
 ```{r fig.wide=TRUE}
 n_genes_hist1 <- seurat@meta.data %>%
   plot_histogram_qc(x = "nFeature_RNA", x_lab = "Number of Detected Genes") +
-  geom_vline(xintercept = min_n_genes, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = max_n_genes, linetype = "dashed", color = "red")
+  geom_vline(xintercept = min_n_genes, linetype = "dashed", color = "red")
 n_genes_hist2 <- n_genes_hist1 +
   scale_x_continuous(limits = c(0, 2000)) 
 n_genes_hist1 + n_genes_hist2
@@ -267,6 +223,11 @@ n_genes_hist1 + n_genes_hist2
 ## Fraction of mitochondrial expression
 
 ```{r}
+# Calculate percentage of mitochondrial and ribosomal expression
+seurat$pct_mt <- PercentageFeatureSet(seurat, pattern = "^MT-")
+
+
+# Plot
 pct_mt_hist <- seurat@meta.data %>%
   plot_histogram_qc(x = "pct_mt", x_lab = "% Mitochondrial Expression") +
   geom_vline(xintercept = max_pct_mt, linetype = "dashed", color = "red") +
@@ -279,8 +240,11 @@ pct_mt_hist
 
 Let us also calculate and visualize the proportion of ribosomal expression:
 
-
 ```{r}
+seurat$pct_ribosomal <- PercentageFeatureSet(
+  seurat,
+  pattern = "^RPS"
+)
 pct_ribosomal_hist <- seurat@meta.data %>%
   plot_histogram_qc(x = "pct_ribosomal", x_lab = "% Ribosomal Expression")
 pct_ribosomal_hist
@@ -305,9 +269,9 @@ n_genes_vs_lib_size <- n_genes_vs_lib_size +
   theme(legend.position = "none", plot.title = element_blank())
 n_genes_vs_lib_size +
   geom_vline(xintercept = min_lib_size, linetype = "dashed", color = "red") +
-  geom_hline(yintercept = min_n_genes, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = max_lib_size, linetype = "dashed", color = "red") +
-  geom_hline(yintercept = max_n_genes, linetype = "dashed", color = "red")
+  geom_hline(yintercept = min_n_genes, linetype = "dashed", color = "red")
+
+  
 # % mitochondrial expression VS library size
 pct_mt_vs_lib_size <- FeatureScatter(
   seurat,
@@ -317,12 +281,12 @@ pct_mt_vs_lib_size <- FeatureScatter(
   cols = rep("black", length(levels(Idents(seurat))))
 )
 pct_mt_vs_lib_size <- pct_mt_vs_lib_size +
+  scale_x_log10()+
   labs(x = "Library Size (total UMI)", y = "% Mitochondrial Expression") +
   theme(legend.position = "none", plot.title = element_blank())
 pct_mt_vs_lib_size +
   geom_vline(xintercept = min_lib_size, linetype = "dashed", color = "red") +
-  geom_hline(yintercept = max_pct_mt, linetype = "dashed", color = "red") +
-  geom_vline(xintercept = max_lib_size, linetype = "dashed", color = "red")
+  geom_hline(yintercept = max_pct_mt, linetype = "dashed", color = "red")
 ```
 
 
@@ -337,21 +301,10 @@ is_low_quality <-
 table(is_low_quality)
 seurat$keep_cells <- !is_low_quality
 Idents(seurat) <- "keep_cells"
+seurat
 seurat <- subset(seurat, idents = TRUE)
+seurat
 metadata_after_qc <- seurat@meta.data
-```
-
-
-## Annotate potential doublets
-
-To aid in the detection and exclusion of doublets, we will identify those outlier cell barcodes that have an abnormally high number of detected genes or library size. Downstream, we will leverage this annotation together with the ones from [scrublet](https://linkinghub.elsevier.com/retrieve/pii/S2405-4712(18)30474-5) and [cell hashing](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-018-1603-1) to discard clusters composed of a high number of doublets.
-
-
-```{r}
-seurat$has_high_lib_size <- 
-  seurat$nCount_RNA > max_lib_size |
-  seurat$nFeature_RNA > max_n_genes
-table(seurat$has_high_lib_size)
 ```
 
 
@@ -359,17 +312,17 @@ table(seurat$has_high_lib_size)
 
 ```{r}
 qc_before <- metadata_before_qc %>%
-  group_by(gem_id) %>% 
+  group_by(donor_id, sample_id, time_point) %>% 
   summarise(num_cells_before_qc = n())
 qc_after <- metadata_after_qc %>%
-  group_by(gem_id) %>%
+  group_by(donor_id, sample_id, time_point) %>%
   summarise(
     num_cells_after_qc = n(),
     average_library_size = mean(nCount_RNA),
     average_num_detected_genes = mean(nFeature_RNA),
     average_mitochondrial_fraction = mean(pct_mt)
   )
-qc_table <- left_join(qc_before, qc_after, by = "gem_id")
+qc_table <- left_join(qc_before, qc_after, by = "sample_id")
 DT::datatable(qc_table)
 ```
 
@@ -417,6 +370,7 @@ top_50_genes_df %>%
 ```{r}
 kept_genes <- rownames(seurat)[n_cells > min_cells]
 table(n_cells > min_cells)
+seurat
 seurat <- subset(seurat, features = kept_genes)
 seurat
 ```
