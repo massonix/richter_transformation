@@ -47,6 +47,10 @@ color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
                    "blue", "mediumorchid2", "coral2", "blueviolet",
                    "indianred4", "deepskyblue1", "dimgray", "deeppink1",
                    "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
 ```
 
 

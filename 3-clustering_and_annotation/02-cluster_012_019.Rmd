@@ -1,5 +1,5 @@
 ---
-title: 'Cluster and annotate tumoral cells (012 and 019)'
+title: 'Cluster tumoral cells (012 and 019)'
 author: "Ramon Massoni-Badosa"
 date: "2021/04/09"
 output: 
@@ -38,7 +38,7 @@ library(tidyverse)
 ```{r}
 # Paths
 path_to_obj <- here::here("results/R_objects/4.seurat_leukemic.rds")
-path_to_save_microenv <- here::here("results/R_objects/5.seurat_list_012_019.rds")
+path_to_save <- here::here("results/R_objects/5.seurat_list_012_019_clustered.rds")
 
 
 # Colors
@@ -46,6 +46,10 @@ color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
                    "blue", "mediumorchid2", "coral2", "blueviolet",
                    "indianred4", "deepskyblue1", "dimgray", "deeppink1",
                    "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
 ```
 
 
@@ -76,14 +80,70 @@ We will know split the cells into its donor of origin: 012 or 019, and process t
 
 ```{r}
 seurat_list <- SplitObject(seurat, split.by = "donor_id")
+seurat_list <- seurat_list[c("12", "19")]
+```
+
+
+# Dimensionality reduction
+
+```{r}
+seurat_list <- purrr::map(seurat_list, process_seurat, dims = 1:20)
+umaps_subproject <- purrr::map(seurat_list, DimPlot, group.by = "subproject")
+umaps_subproject
+```
+
+As we can see, there is a large batch effect between the two experiments we conducted BCLLATLAS_10 and BCLLATLAS_29. As we know, in BCLLATLAS_10 we obtain single-cell transcriptomes for serial clinical samples of 4 donors. However, as we observed that some points were underrepresented (had less cells), we performed scRNA-seq of specific cases (BCLLATLAS_29).
+
+Thus, we will initially work with BCLLATLAS_10, and use BCLLATLAS_29 later as a validation.
+
+
+```{r}
 seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
-  seurat_obj <- seurat_obj %>%
-    FindVariableFeatures() %>%
-    ScaleData() %>%
-    RunPCA() %>%
-    RunUMAP(reduction = "pca", dim = 1:20)
+  seurat_obj <- subset(seurat_obj, subset = subproject == "BCLLATLAS_10")
+  seurat_obj <- process_seurat(seurat_obj, dims = 1:20)
   seurat_obj
 })
+purrr::map(seurat_list, DimPlot)
+```
+
+
+Interestingly, we see subset of cells between Richter-like and CLL-like  cells that have a high mitochondrial content
+
+```{r}
+umap_pct_mt <- FeaturePlot(seurat_list$`19`, "pct_mt") +
+  scale_colour_viridis_c(option = "inferno")
+umap_richter <- DimPlot(seurat_list$`19`, group.by = "is_richter")
+umap_richter + umap_pct_mt
+```
+
+
+# Clustering
+
+```{r}
+resolutions <- c(0.1, 0.25, 0.3, 0.4, 0.5)
+seurat_list <- purrr::map(
+  seurat_list,
+  FindNeighbors,
+  reduction = "pca",
+  dims = 1:20
+)
+seurat_list <- purrr::map(seurat_list, FindClusters, resolution = resolutions)
+
+
+# Chosen resolutions
+umap_clusters_12 <- DimPlot(
+  seurat_list$`12`,
+  group.by = "RNA_snn_res.0.25",
+  cols = color_palette
+)
+Idents(seurat_list$`12`) <- "RNA_snn_res.0.25"
+umap_clusters_19 <- DimPlot(
+  seurat_list$`19`,
+  group.by = "RNA_snn_res.0.25",
+  cols = color_palette
+)
+umap_clusters_12
+umap_clusters_19
 ```
 
 
