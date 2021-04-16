@@ -1,0 +1,140 @@
+---
+title: 'Separate leukemic and microenvironment cells'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The objective of this notebook is to separate the microenvironment (T cells, monocytes, etc.) from the leukemic B (CD79+) cells.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/3.seurat_filtered.rds")
+path_to_save_microenv <- here::here("results/R_objects/4.seurat_microenvironment.rds")
+path_to_save_leukemic <- here::here("results/R_objects/4.seurat_leukemic.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+```
+
+
+# Normalization, Dimensionality reduction and batch effect correction
+
+```{r}
+seurat <- seurat %>%
+  NormalizeData(
+    normalization.method = "LogNormalize",
+    scale.factor = 10000
+  ) %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA() %>%
+  RunHarmony(group.by.vars = "sample_id", reduction = "pca", dims = 1:30) %>%
+  RunUMAP(dims = 1:30, reduction = "harmony")
+```
+
+
+# Visualize lineage markers
+
+To ease the annotation, let us visualize some key lineage markers
+
+```{r}
+lineage_markers <- c("CD79A", "CD3D", "CD8A", "IL7R", "NKG7",
+                     "LYZ", "HBM", "TOP2A")
+lineage_markers_ggs <- purrr::map(lineage_markers, function(x) {
+  p <- FeaturePlot(seurat, features = x, pt.size = 0.45)
+  p +
+    scale_color_viridis_c(option = "magma")
+})
+names(lineage_markers_ggs) <- lineage_markers
+lineage_markers_ggs
+```
+
+
+# Cluster
+
+```{r}
+seurat <- FindNeighbors(
+  seurat,
+  dims = 1:30,
+  reduction = "harmony"
+)
+seurat <- FindClusters(seurat, resolution = 0.1)
+DimPlot(seurat, cols = color_palette, pt.size = 0.3)
+richter_levels <- c("richter_sp", "richter_while-ibrutinib",
+                    "richter_post-ofatu-duvelisib")
+seurat$is_richter <- ifelse(
+  seurat$sample_description %in% richter_levels,
+  TRUE,
+  FALSE
+)
+DimPlot(seurat, group.by = "is_richter")
+DimPlot(seurat, group.by = "tissue")
+```
+
+
+
+# Separate CD5+ B cells from microenvironment
+
+As we can see, clusters 2 and 4 correspond to T cells, NK cells and monocytes. Cluster 3 contains mostly Richter-specific cells, so although it contains residual erythrocytes (HBM+) we will include it with the leukemic.
+
+```{r}
+microenv_clusters <- c("2", "4")
+leuk_clusters <- c("0", "1", "3")
+microenv <- subset(seurat, idents = microenv_clusters)
+leuk <- subset(seurat, idents = leuk_clusters)
+```
+
+
+# Save
+
+```{r}
+saveRDS(microenv, path_to_save_microenv)
+saveRDS(leuk, path_to_save_leukemic)
+```
+
+# Sesion Information
+
+```{r}
+sessionInfo()
+```
+

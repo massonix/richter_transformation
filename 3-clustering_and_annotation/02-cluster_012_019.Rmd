@@ -1,0 +1,102 @@
+---
+title: 'Cluster and annotate tumoral cells (012 and 019)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Out of all the serial clinical samples that we have, only in two patients we have samples of peripheral blood only: 012 and 019. Since from our exploratory analysis we know that the tissue of origin (PB, lymph node or bone marrow) is a major confounder, for now we will only focus in these two.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/4.seurat_leukemic.rds")
+path_to_save_microenv <- here::here("results/R_objects/5.seurat_list_012_019.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+```
+
+
+# Subset
+
+Let us start by visualizing our initial embedding:
+
+```{r}
+DimPlot(seurat, group.by = "tissue")
+```
+
+
+As we explained, for now we will only work with cells of peripheral blood (PB):
+
+```{r}
+seurat <- subset(seurat, subset = tissue == "PB")
+DimPlot(seurat, group.by = "tissue")
+```
+
+We will know split the cells into its donor of origin: 012 or 019, and process them separately:
+
+```{r}
+seurat_list <- SplitObject(seurat, split.by = "donor_id")
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- seurat_obj %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    RunUMAP(reduction = "pca", dim = 1:20)
+  seurat_obj
+})
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat_list, path_to_save)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
