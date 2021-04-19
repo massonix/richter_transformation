@@ -69,6 +69,10 @@ markers_list <- purrr::map(
   only.pos = TRUE,
   logfc.threshold = 0.5
 )
+saveRDS(
+  markers_list,
+  here::here("3-clustering_and_annotation/tmp/markers_richter.rds")
+)
 ```
 
 

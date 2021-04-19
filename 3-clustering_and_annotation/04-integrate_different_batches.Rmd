@@ -18,6 +18,8 @@ options(width = 1200)
 
 # Introduction
 
+IMPORTANT: RUN HARMONY WITH GROUP.BY.VARS = "SUBPROJECT" AND SUBSETTING TO KEEP ONLY 00_30, ETC. FOR BCLLATLAS_10, SO THAT WE ARE STRICTLY CORRECTING TECHNICAL REPLICATES.
+
 In previous notebooks, we clustered and annotated tumoral cells of the subproject BCLLATLAS_10 for the donors 12 and 19. Here, we will transfer this label to the cells of the subproject BCLLATLAS_29. To do so, we will leverage [Harmony](), as several benchmarking efforts have demonstrated that it's the best performing batch effect correction tool.
 
 Importantly, integration tools can remove biological variability of interest, so we will also cluster BCLLATLAS_29 samples independently to see if the underlining biology is preserved.

@@ -110,10 +110,14 @@ purrr::map(seurat_list, DimPlot)
 Interestingly, we see subset of cells between Richter-like and CLL-like  cells that have a high mitochondrial content
 
 ```{r}
-umap_pct_mt <- FeaturePlot(seurat_list$`19`, "pct_mt") +
-  scale_colour_viridis_c(option = "inferno")
+vars_of_interest <- c("pct_mt", "INPP5D", "MIR155HG", "CHD2")
+feature_plots <- purrr::map(vars_of_interest, function(x) {
+  FeaturePlot(seurat_list$`19`, x) +
+    scale_colour_viridis_c(option = "inferno")
+})
 umap_richter <- DimPlot(seurat_list$`19`, group.by = "is_richter")
-umap_richter + umap_pct_mt
+umap_richter
+feature_plots
 ```
 
 
@@ -144,6 +148,12 @@ umap_clusters_19 <- DimPlot(
 )
 umap_clusters_12
 umap_clusters_19
+FeatureScatter(
+  seurat_list$`19`,
+  feature1 = "nFeature_RNA",
+  feature2 = "pct_mt",
+  group.by = "RNA_snn_res.0.25"
+)
 ```
 
 
