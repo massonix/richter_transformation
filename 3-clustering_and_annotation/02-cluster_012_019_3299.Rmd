@@ -157,12 +157,13 @@ umap_clusters_19 <- DimPlot(
   group.by = "RNA_snn_res.0.25",
   cols = color_palette
 )
-Idents(seurat_list$`3299`) <- "RNA_snn_res.0.4"
+Idents(seurat_list$`19`) <- "RNA_snn_res.0.25"
 umap_clusters_3299 <- DimPlot(
   seurat_list$`3299`,
   group.by = "RNA_snn_res.0.4",
   cols = color_palette
 )
+Idents(seurat_list$`3299`) <- "RNA_snn_res.0.4"
 
 umap_clusters_12
 umap_clusters_19
