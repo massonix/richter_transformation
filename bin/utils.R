@@ -86,3 +86,12 @@ plot_histogram_qc <- function(df, x, x_lab) {
     theme_pubr()
 }
 
+
+process_seurat <- function(seurat_obj, dims = 1:30) {
+  seurat_obj <- seurat_obj %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    RunUMAP(reduction = "pca", dim = dims)
+  seurat_obj
+}
