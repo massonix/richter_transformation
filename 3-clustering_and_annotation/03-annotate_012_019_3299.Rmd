@@ -57,8 +57,40 @@ source(here::here("bin/utils.R"))
 
 ```{r}
 seurat_list <- readRDS(path_to_obj)
+purrr::map(seurat_list, DimPlot)
+purrr::map(seurat_list, DimPlot, group.by = "is_richter")
 ```
 
+
+# Cell Cycle Score
+
+As upregulation of cell cycle genes is a hallmark of Richter transformation, we will infer the cell cycle score and phase for each cell:
+
+```{r}
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- CellCycleScoring(
+    seurat_obj,
+    s.features = cc.genes.updated.2019$s.genes,
+    g2m.features = cc.genes.updated.2019$g2m.genes,
+    set.ident = FALSE
+  )
+  seurat_obj
+})
+cc_phase_ggs <- purrr::map(seurat_list, DimPlot, group.by = "Phase")
+s_score_ggs <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, features = "S.Score") +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+g2m_score_ggs <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, features = "G2M.Score") +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+cc_phase_ggs
+s_score_ggs
+g2m_score_ggs
+```
 
 # Find Markers
 
@@ -75,6 +107,16 @@ markers_list <- purrr::map(markers_list, function(df) {
     arrange(desc(avg_log2FC), .by_group = TRUE)
   df
 })
+
+print("Markers 012")
+DT::datatable(markers_list$`12`)
+
+print("Markers 019")
+DT::datatable(markers_list$`19`)
+
+print("Markers 3299")
+DT::datatable(markers_list$`3299`)
+
 saveRDS(
   markers_list,
   here::here("3-clustering_and_annotation/tmp/markers_richter.rds")
@@ -82,14 +124,126 @@ saveRDS(
 ```
 
 
-# Annotation
+We can also compare all Richter-like clones against CLL:
 
 ```{r}
-annotation_012 <- c()
-annotation_019 <- c()
+markers_richter_12 <- FindMarkers(
+  seurat_list$`12`,
+  ident.1 = c("2", "3"),
+  ident.2 = c("0", "1"),
+  only.pos = FALSE,
+  logfc.threshold = 0.5
+)
+DT::datatable(markers_richter_12)
+
+markers_richter_19 <- FindMarkers(
+  seurat_list$`19`,
+  ident.1 = c("0", "1"),
+  ident.2 = c("2"),
+  only.pos = FALSE,
+  logfc.threshold = 0.5
+)
+DT::datatable(markers_richter_19)
+
+markers_richter_3299 <- FindMarkers(
+  seurat_list$`3299`,
+  ident.1 = c("", ""),
+  ident.2 = c("", ""),
+  only.pos = FALSE,
+  logfc.threshold = 0.5
+)
+DT::datatable(markers_richter_3299)
+```
+
+Interesting observations:
+
+- H2AFY
+- MIF
+- LILRA4
+- TCL1A
+- PRDM2
+- MIR155HG
+- INPP5D
+- XBP1
+- CLPTM1L
+-	AC007952.4
+- AC245014.3
+
+
+# Annotation
+
+## Patient 012
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CXCR4                     | CXCR4+CD27-                |
+| 1       | CD27                      | CXCR4-CD27+                |
+| 2       | MIF                       | Richter-like quiescent     |
+| 3       | TOP2A, MKI67              | Richter-like proliferative |
+| 4       | MT-ND1, MT-CO3            | poor-quality               |
+| 5       | MZB1, IGHM, XBP1, CLPTM1L | MZB1+IGHM++XBP1+           |
+| 6       | HBM                       | erythrocytes               |
+
+
+```{r}
+annotation_012 <- c("CXCR4+CD27-", "CXCR4-CD27+", "Richter-like quiescent",
+                    "Richter-like proliferative", "poor-quality",
+                    "MZB1+IGHM++XBP1+", "erythrocytes")
+seurat_list$`12`$seurat_clusters <- Idents(seurat_list$`12`)
+seurat_list$`12`$annotation <- Idents(seurat_list$`12`)
+levels(seurat_list$`12`$annotation) <- annotation_012
+Idents(seurat_list$`12`) <- "annotation"
+DimPlot(seurat_list$`12`, cols = color_palette)
 ```
 
 
+## Patient 019
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CXCR4                     | CXCR4+CD27-                |
+| 1       | CD27                      | CXCR4-CD27+                |
+| 2       | CCR7                      | Richter-like quiescent     |
+| 3       | MALAT                     | poor-quality               |
+| 4       | TOP2A, MKI67              | Richter-like proliferative |
+| 5       | HBM                       | erythrocytes               |
+
+
+```{r}
+annotation_019 <- c("CXCR4+CD27-", "CXCR4-CD27+", "Richter-like quiescent",
+                    "poor-quality", "Richter-like proliferative", "erythrocytes")
+seurat_list$`19`$seurat_clusters <- Idents(seurat_list$`19`)
+seurat_list$`19`$annotation <- Idents(seurat_list$`19`)
+levels(seurat_list$`19`$annotation) <- annotation_019
+Idents(seurat_list$`19`) <- "annotation"
+DimPlot(seurat_list$`19`, cols = color_palette)
+```
+
+
+## Patient 3299
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CXCR4                     | CXCR4+CD27-                |
+| 1       | CD27                      | CXCR4-CD27+                |
+| 2       | KLF6                      | Richter-like quiescent     |
+| 3       | mitochondrial genes       | poor-quality               |
+| 4       | MIR155HG                  | MIR155HG                   |
+| 5       | HBM/TOP2A                 | erythrocytes/proliferative |
+
+
+```{r}
+annotation_3299 <- c("CXCR4+CD27-", "CXCR4-CD27+", "Richter-like quiescent",
+                    "poor-quality", "MIR155HG", "erythrocytes/proliferative")
+seurat_list$`3299`$seurat_clusters <- Idents(seurat_list$`3299`)
+seurat_list$`3299`$annotation <- Idents(seurat_list$`3299`)
+levels(seurat_list$`3299`$annotation) <- annotation_3299
+Idents(seurat_list$`3299`) <- "annotation"
+DimPlot(seurat_list$`3299`, cols = color_palette)
+```
+
+
+In all 3 donors we have seena a cluster of poor-quality cells, but that has a high expression of important CLL genes: CHD2 and ATM, among others. Thus, we need to check carefully before excluding them.
 
 
 # Save
