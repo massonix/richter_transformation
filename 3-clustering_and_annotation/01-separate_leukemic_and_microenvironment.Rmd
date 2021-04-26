@@ -119,13 +119,15 @@ DimPlot(seurat, group.by = "tissue")
 
 # Separate CD5+ B cells from microenvironment
 
-As we can see, clusters 2 and 4 correspond to T cells, NK cells and monocytes. Cluster 3 contains mostly Richter-specific cells, so although it contains residual erythrocytes (HBM+) we will include it with the leukemic.
+As we can see, clusters 2 and 5 correspond to T cells, NK cells and monocytes. Cluster 3 contains mostly Richter-specific cells, so although it contains residual erythrocytes (HBM+) we will include it with the leukemic.
 
 ```{r}
-microenv_clusters <- c("2", "4")
-leuk_clusters <- c("0", "1", "3")
+microenv_clusters <- c("2", "5")
+leuk_clusters <- c("0", "1", "3", "4", "6")
 microenv <- subset(seurat, idents = microenv_clusters)
 leuk <- subset(seurat, idents = leuk_clusters)
+DimPlot(leuk, cols = color_palette, pt.size = 0.3)
+DimPlot(microenv, cols = color_palette, pt.size = 0.3)
 ```
 
 
