@@ -1,0 +1,106 @@
+---
+title: 'Annotate tumoral cells'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to find markers for each of the clusters defined previously, so that we can annotate them to specific clones or cell types.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/5.seurat_list_clustered.rds")
+path_to_save <- here::here("results/R_objects/6.seurat_list_annotated.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat_list <- readRDS(path_to_obj)
+```
+
+
+# Find Markers
+
+```{r}
+markers_list <- purrr::map(
+  seurat_list,
+  FindAllMarkers,
+  only.pos = TRUE,
+  logfc.threshold = 0.5
+)
+markers_list <- purrr::map(markers_list, function(df) {
+  df <- df %>%
+    group_by(cluster) %>%
+    arrange(desc(avg_log2FC), .by_group = TRUE)
+  df
+})
+saveRDS(
+  markers_list,
+  here::here("3-clustering_and_annotation/tmp/markers_richter.rds")
+)
+```
+
+
+# Annotation
+
+```{r}
+annotation_012 <- c()
+annotation_019 <- c()
+```
+
+
+
+
+# Save
+
+```{r}
+saveRDS(seurat_list, path_to_save)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
