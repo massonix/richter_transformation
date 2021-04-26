@@ -1,5 +1,5 @@
 ---
-title: 'Cluster tumoral cells (012 and 019)'
+title: 'Cluster tumoral cells'
 author: "Ramon Massoni-Badosa"
 date: "2021/04/09"
 output: 
@@ -18,7 +18,7 @@ options(width = 1200)
 
 # Introduction
 
-Out of all the serial clinical samples that we have, only in two patients we have samples of peripheral blood only: 012 and 019. Since from our exploratory analysis we know that the tissue of origin (PB, lymph node or bone marrow) is a major confounder, for now we will only focus in these two.
+From our exploratory analysis, we know that the tissue of origin (PB, lymph node or bone marrow) is a major driver of transcriptional variability. Thus, we will only work with clinical samples that come from the same niche.
 
 
 # Pre-processing
@@ -68,19 +68,30 @@ Let us start by visualizing our initial embedding:
 DimPlot(seurat, group.by = "tissue")
 ```
 
-
-As we explained, for now we will only work with cells of peripheral blood (PB):
-
-```{r}
-seurat <- subset(seurat, subset = tissue == "PB")
-DimPlot(seurat, group.by = "tissue")
-```
-
-We will know split the cells into its donor of origin: 012 or 019, and process them separately:
+We will know split the cells into its donor of origin and check the tissue of origin across samples:
 
 ```{r}
 seurat_list <- SplitObject(seurat, split.by = "donor_id")
-seurat_list <- seurat_list[c("12", "19")]
+purrr::walk(names(seurat_list), function(x) {
+  print(x)
+  print(table(seurat_list[[x]]$sample_description_FN, seurat_list[[x]]$tissue))
+})
+table(seurat_list[["3299"]]$sample_description_FN, seurat_list[["3299"]]$tissue)
+
+```
+
+The samples from donor 365 are clearly confounded by tissue. In other words, in case of observing differences between time-points, we would not know if they come from differences in niche or clinical stage. Thus, we will rule it out for now.
+
+On the other hand, the RS sample from donor 3299 comes from PB, whilst the others come from BM. However, since we know that Ferran could assign 80 to 90% of the cells in post-treatment_3 to Richter cells, we will work with them and exclude the RS sample.
+
+```{r}
+seurat_list <- seurat_list[c("12", "19", "3299")]
+seurat_list$`3299`
+seurat_list$`3299` <- subset(
+  seurat_list$`3299`,
+  subset = sample_description_FN != "RS"
+)
+seurat_list$`3299`
 ```
 
 
@@ -146,8 +157,16 @@ umap_clusters_19 <- DimPlot(
   group.by = "RNA_snn_res.0.25",
   cols = color_palette
 )
+Idents(seurat_list$`3299`) <- "RNA_snn_res.0.4"
+umap_clusters_3299 <- DimPlot(
+  seurat_list$`3299`,
+  group.by = "RNA_snn_res.0.4",
+  cols = color_palette
+)
+
 umap_clusters_12
 umap_clusters_19
+umap_clusters_3299
 FeatureScatter(
   seurat_list$`19`,
   feature1 = "nFeature_RNA",
