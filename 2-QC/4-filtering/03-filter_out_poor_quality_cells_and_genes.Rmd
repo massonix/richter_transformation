@@ -112,6 +112,24 @@ removed_vars <- c("HTO_maxID", "HTO_secondID", "HTO_margin", "HTO_classification
 seurat@meta.data <- seurat@meta.data[, !(colnames(seurat@meta.data) %in% removed_vars)]
 ```
 
+In addition, we see that Ferran included the variable "Exclude_FN" in the metadata:
+
+```{r}
+exclude_fn <- which(
+  seurat$Exclude_FN == "Sample excluded due to low quality in the other techniques"
+)
+unique(seurat$sample_id[exclude_fn])
+```
+
+As we can see, we can exclude the sample "14/2944" due to low quality in other techniques:
+
+```{r}
+seurat
+keep_cells <- colnames(seurat)[seurat$sample_id != "14/2944"]
+seurat <- subset(seurat, cells = keep_cells)
+seurat
+```
+
 
 # Distribution of QC variables
 
