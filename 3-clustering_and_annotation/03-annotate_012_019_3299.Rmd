@@ -147,8 +147,8 @@ DT::datatable(markers_richter_19)
 
 markers_richter_3299 <- FindMarkers(
   seurat_list$`3299`,
-  ident.1 = c("", ""),
-  ident.2 = c("", ""),
+  ident.1 = "2",
+  ident.2 = c("0", "1"),
   only.pos = FALSE,
   logfc.threshold = 0.5
 )
@@ -243,7 +243,7 @@ DimPlot(seurat_list$`3299`, cols = color_palette)
 ```
 
 
-In all 3 donors we have seena a cluster of poor-quality cells, but that has a high expression of important CLL genes: CHD2 and ATM, among others. Thus, we need to check carefully before excluding them.
+In all 3 donors we have seen a a cluster of poor-quality cells, but that has a high expression of important CLL genes: CHD2 and ATM, among others. Thus, we need to check carefully before excluding them.
 
 
 # Save
