@@ -39,7 +39,7 @@ metadata_all <- left_join(metadata, patient_metadata, by = "sample_id")
 metadata_all <- as.data.frame(metadata_all)
 rownames(metadata_all) <- metadata_all$zUMI_barcode
 if (all(rownames(metadata_all) == colnames(counts))) {
-  seurat <- CreateSeuratObject(counts = counts, meta.data = metadata)
+  seurat <- CreateSeuratObject(counts = counts, meta.data = metadata_all)
 }
 
 
