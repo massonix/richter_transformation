@@ -1,0 +1,132 @@
+---
+title: 'Clonal evolution'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to visualize the clonal transcriptomic evolution in Richter syndrome.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/6.seurat_list_annotated.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat_list <- readRDS(path_to_obj)
+purrr::map(seurat_list, DimPlot, cols = color_palette)
+```
+
+
+# Clonal evolution
+
+## UMAPs splitted by time point
+
+```{r}
+umaps_time_points <- purrr::map(names(seurat_list), function(x) {
+  p <- plot_split_umap(seurat_list[[x]], "time_point") +
+    ggtitle(x) +
+    theme(plot.title = element_text(size = 13, hjust = 0.5, face = "bold"))
+  p
+})
+names(umaps_time_points) <- names(seurat_list)
+umaps_time_points
+```
+
+
+## Stacked areas
+
+Let us start by computing the proportions of clons across time points:
+
+```{r}
+proportions_dfs <- purrr::map(seurat_list, function(seurat_obj) {
+  df <- seurat_obj@meta.data %>%
+    select("time_point", "annotation") %>%
+    group_by(time_point, annotation) %>%
+    summarise(n_cells = n()) %>%
+    ungroup() %>%
+    group_by(time_point) %>%
+    mutate(n_cells_total = sum(n_cells)) %>%
+    ungroup() %>%
+    mutate(percentage_cells = round(n_cells / n_cells_total * 100, 3))
+  df
+})
+DT::datatable(proportions_dfs$`12`)
+DT::datatable(proportions_dfs$`19`)
+DT::datatable(proportions_dfs$`3299`)
+```
+
+Plots:
+
+```{r}
+stacked_areas_ggs <- purrr::map(names(proportions_dfs), function(x) {
+  p <- proportions_dfs[[x]] %>%
+    mutate(time_point = as.numeric(str_remove(time_point, "T"))) %>%
+    ggplot(aes(time_point, percentage_cells, fill = annotation)) +
+      geom_area() +
+      ggtitle(x) +
+      labs(x = "Time Point", y = "Percentage of Cells (%)", fill = "") + 
+      scale_fill_manual(values = color_palette) +
+      theme_bw() +
+      theme(plot.title = element_text(size = 13, hjust = 0.5, face = "bold"))
+  p
+})
+stacked_areas_ggs
+```
+
+  
+## Stacked bar plots
+
+```{r}
+
+```
+
+
+# Session Inforamation
+
+```{r}
+sessionInfo()
+```
+
