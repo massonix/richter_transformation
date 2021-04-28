@@ -1,0 +1,207 @@
+---
+title: 'Clustering (patient 63)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to cluster the cells obtained from patient with id 63.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(ggpubr)
+library(tidyverse)
+```
+
+
+## Parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/patient_63/2.seurat_object_filtered.rds")
+path_to_save <- here::here("results/R_objects/patient_63/3.seurat_LN_annotated.rds")
+
+
+# Functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+seurat
+```
+
+
+# Dimensionality reduction
+
+## All cells
+
+### Data normalization
+
+```{r}
+seurat <- NormalizeData(
+  seurat,
+  normalization.method = "LogNormalize",
+  scale.factor = 10000
+)
+```
+
+
+### Highly variable genes
+
+```{r}
+seurat <- FindVariableFeatures(seurat)
+LabelPoints(
+  plot = VariableFeaturePlot(seurat),
+  points = head(VariableFeatures(seurat), 10),
+  repel = TRUE
+)
+```
+
+### Principal Component Analysis
+
+```{r}
+seurat <- ScaleData(seurat)
+seurat <- RunPCA(seurat)
+VizDimLoadings(seurat, dims = 1:2, reduction = "pca")
+```
+
+
+### UMAP
+
+```{r fig.wide=TRUE}
+seurat <- RunUMAP(seurat, reduction = "pca", dims = 1:20)
+umap_time_point <- DimPlot(seurat, group.by = "time_point")
+umap_tissue <- DimPlot(seurat, group.by = "tissue")
+umap_time_point + umap_tissue
+```
+
+## Tissue-specific
+
+As we can see, the tissue of origin (peripheral blood or lymph node) is a major source of heterogeneity. Thus, we will repeat the process splitting the Seurat object by tissue:
+
+```{r}
+seurat_list <- SplitObject(seurat, split.by = "tissue")
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- seurat_obj %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    RunUMAP(n.neighbors = 15, reduction = "pca", dims = 1:20)
+  seurat_obj
+})
+umap_ln_time_point <- DimPlot(seurat_list$LN, group.by = "time_point")
+umap_pb_time_point <- DimPlot(seurat_list$PB, group.by = "time_point")
+umap_pb_time_point + umap_ln_time_point
+```
+
+
+# Cluster
+
+```{r}
+seurat_list <- purrr::map(
+  seurat_list,
+  FindNeighbors,
+  dims = 1:20,
+  reduction = "pca",
+  k.param = 15
+)
+
+
+seurat_list$LN <- FindClusters(seurat_list$LN, resolution = 0.4)
+seurat_list$PB <- FindClusters(seurat_list$PB, resolution = 0.75)
+DimPlot(seurat_list$LN) + DimPlot(seurat_list$PB)
+DimPlot(seurat_list$LN) + DimPlot(seurat_list$LN, group.by = "sample_description_FN")
+```
+
+Clearly, the cells from peripheral blood are very homogeneous, so we can hardly find any structure in the data. On the other hand, the cells from lymph node clearly divide into Richter and CLL.
+
+
+# Markers
+
+```{r}
+markers_all <- FindAllMarkers(
+  seurat_list$LN,
+  only.pos = TRUE,
+  logfc.threshold = 0.75
+)
+DT::datatable(markers_all)
+```
+```{r}
+p1 <- FeaturePlot(seurat_list$LN, "IGHM") +
+  scale_color_viridis_c(option = "magma")
+p2 <- FeaturePlot(seurat_list$LN, "IGHG1") +
+  scale_color_viridis_c(option = "magma")
+p1 + p2
+```
+
+
+Curious observation: IGHM and IGHG1 have mutually exclusive expression patterns.
+
+
+# Cell cycle scoring
+
+```{r}
+seurat_list$LN <- CellCycleScoring(
+  seurat_list$LN,
+  s.features = cc.genes.updated.2019$s.genes,
+  g2m.features = cc.genes.updated.2019$g2m.genes
+)
+FeaturePlot(seurat_list$LN, features = "S.Score") +
+  scale_color_viridis_c(option = "magma")
+FeaturePlot(seurat_list$LN, features = "G2M.Score") +
+  scale_color_viridis_c(option = "magma")
+```
+
+
+# Annotation
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CXCR4                     | CXCR4+ CLL-like            |
+| 1       | IGHG1, IGHG4              | Richter-like               |
+
+
+```{r}
+seurat_list$LN$annotation <- seurat_list$LN$seurat_clusters
+levels(seurat_list$LN$annotation) <- c("CXCR4+ CLL-like", "Richter-like")
+Idents(seurat_list$LN) <- "annotation"
+DimPlot(seurat_list$LN)
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat_list$LN, path_to_save)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
+

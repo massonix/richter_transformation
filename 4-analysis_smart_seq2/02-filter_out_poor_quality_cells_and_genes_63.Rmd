@@ -1,0 +1,268 @@
+---
+title: 'Quality Control: Cell and Gene Filtering (patient 63)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to filter out poor quality cells and genes for the patient with id "63".
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(ggpubr)
+library(tidyverse)
+```
+
+
+## Parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/patient_63/1.seurat_object_unfiltered.rds")
+path_to_save <- here::here("results/R_objects/patient_63/2.seurat_object_filtered.rds")
+
+
+# Functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+min_lib_size <- 150000
+max_lib_size <- 700000
+min_n_genes <- 550
+max_n_genes <- 3750
+max_pct_mt <- 18
+min_cells <- 3
+```
+
+
+## Load data
+
+```{r}
+# Read merged Seurat object
+seurat <- readRDS(path_to_obj)
+seurat
+```
+
+
+# Visualize experimental design
+
+In this Smart-seq2 experiment, we had a total of 12 plates. We can visualize the experimental design with the [scater](https://academic.oup.com/bioinformatics/article/33/8/1179/2907823) package. (TODO)
+
+```{r}
+
+```
+
+
+# Distribution of QC variables
+
+First, we want to see how the main QC variables distribute across samples. This will help us interpret the results downstream, as we will know which are the samples with lower quality.
+
+## Library complexity
+
+```{r}
+# Calculate mean library size
+seurat$time_point[is.na(seurat$time_point)] <- "empty"
+seurat$sample_id[is.na(seurat$sample_id)] <- "empty"
+lib_complexity_df <- seurat@meta.data %>%
+  dplyr::group_by(time_point, sample_id) %>%
+  dplyr::summarise(
+    mean_n_features = round(mean(nFeature_RNA), 2),
+    sd_n_features = round(sd(nFeature_RNA), 2)) %>%
+  dplyr::arrange(time_point)
+print(lib_complexity_df)
+
+
+# Plot library size distribution
+lib_size_per_time_point <- seurat@meta.data %>%
+  ggplot(aes(time_point, nFeature_RNA, fill = tissue)) +
+    geom_violin() +
+    scale_y_log10() +
+    labs(title = "", x = "", y = "Number of Detected Genes") +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 13),
+      axis.text = element_text(size = 11),
+      axis.title = element_text(size = 13),
+      legend.title = element_blank()
+    ) 
+lib_size_per_time_point
+```
+
+Notice that the NA corresponds to the empty wells taht are used as negative control.
+
+
+# Filter out cells
+
+We aim to detect and exclude empty droplets or lysed cells. Lysed cells have 3 hallmarks: (1) low library size (total UMI), (2) low library complexity (number of detected genes) and (3) high fraction of mitochondrial expression (cytosolic mRNA leaks out of the cell). Let us start by visualizing their univariate distributions.
+
+
+## Library Size
+
+```{r fig.wide=TRUE}
+lib_size_hist <- seurat@meta.data %>%
+  plot_histogram_qc(x = "nCount_RNA", x_lab = "Library Size (log10(total UMI))") +
+  geom_vline(xintercept = min_lib_size, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = max_lib_size, linetype = "dashed", color = "red")
+lib_size_hist
+```
+
+
+## Number of detected genes
+
+```{r fig.wide=TRUE}
+n_genes_hist <- seurat@meta.data %>%
+  plot_histogram_qc(x = "nFeature_RNA", x_lab = "Number of Detected Genes") +
+  geom_vline(xintercept = min_n_genes, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = max_n_genes, linetype = "dashed", color = "red")
+n_genes_hist
+```
+
+
+## Fraction of mitochondrial expression
+
+```{r}
+# Calculate percentage of mitochondrial and ribosomal expression
+seurat$pct_mt <- PercentageFeatureSet(seurat, pattern = "^MT-")
+
+
+# Plot
+pct_mt_hist <- seurat@meta.data %>%
+  plot_histogram_qc(x = "pct_mt", x_lab = "% Mitochondrial Expression") +
+  geom_vline(xintercept = max_pct_mt, linetype = "dashed", color = "red") +
+  scale_x_continuous(limits = c(0, 100))
+pct_mt_hist
+```
+
+
+## Fraction of ribosomal expression
+
+Let us also calculate and visualize the proportion of ribosomal expression:
+
+```{r}
+seurat$pct_ribosomal <- PercentageFeatureSet(
+  seurat,
+  pattern = "^RPS"
+)
+pct_ribosomal_hist <- seurat@meta.data %>%
+  plot_histogram_qc(x = "pct_ribosomal", x_lab = "% Ribosomal Expression")
+pct_ribosomal_hist
+```
+
+
+## Subset empty droplets and lysed cells
+
+```{r}
+metadata_before_qc <- seurat@meta.data
+is_low_quality <- 
+  seurat$nCount_RNA < min_lib_size |
+  seurat$nCount_RNA > max_lib_size |
+  seurat$nFeature_RNA < min_n_genes |
+  seurat$nFeature_RNA > max_n_genes |
+  seurat$pct_mt > max_pct_mt
+table(is_low_quality)
+seurat$keep_cells <- !is_low_quality
+Idents(seurat) <- "keep_cells"
+seurat
+seurat <- subset(seurat, idents = TRUE)
+seurat
+metadata_after_qc <- seurat@meta.data
+```
+
+
+## QC summary table
+
+```{r}
+qc_before <- metadata_before_qc %>%
+  group_by(sample_id, time_point) %>% 
+  summarise(num_cells_before_qc = n())
+qc_after <- metadata_after_qc %>%
+  group_by(sample_id, time_point) %>%
+  summarise(
+    num_cells_after_qc = n(),
+    average_library_size = mean(nCount_RNA),
+    average_num_detected_genes = mean(nFeature_RNA),
+    average_mitochondrial_fraction = mean(pct_mt)
+  )
+qc_table <- left_join(qc_before, qc_after, by = "sample_id")
+DT::datatable(qc_table)
+```
+
+
+# Filter out genes
+
+According to [Luecken MD et al.](https://www.embopress.org/doi/10.15252/msb.20188746): "A guideline to setting this threshold is to use the minimum cell cluster size that is of interest and leaving some leeway for dropout effects. For example, filtering out genes expressed in fewer than 20 cells may make it difficult to detect cell clusters with fewer than 20 cells. For datasets with high dropout rates, this threshold may also complicate the detection of larger clusters. The choice of threshold should scale with the number of cells in the dataset and the intended downstream analysis."
+
+
+## Set threshold
+
+```{r fig.wide=TRUE}
+n_cells <- Matrix::rowSums(seurat[["RNA"]]@counts > 0)
+gene_qc <- n_cells %>% 
+  as.data.frame() %>% 
+  ggplot(aes(n_cells)) + 
+    geom_histogram(bins = 100, alpha = 0.75) +
+    scale_x_log10("Number of cells") +
+    theme_bw() 
+gene_qc +
+  geom_vline(xintercept = min_cells, linetype = "dashed", color = "red")
+```
+
+
+## Plot genes with highest expression
+
+```{r fig.height=10}
+top_50_genes <- sort(n_cells, decreasing = TRUE)[1:50]
+top_50_genes_df <- data.frame(
+  gene = names(top_50_genes),
+  n_cells = top_50_genes
+)
+top_50_genes_df %>%
+  ggplot(aes(fct_reorder(gene, n_cells), n_cells)) +
+    geom_point() +
+    labs(x = "", y = "Number of expressing cells") +
+    coord_flip()
+```
+
+
+## Filter
+
+```{r}
+kept_genes <- rownames(seurat)[n_cells > min_cells]
+table(n_cells > min_cells)
+seurat
+seurat <- subset(seurat, features = kept_genes)
+seurat
+```
+
+
+# Save filtered Seurat object
+
+```{r}
+saveRDS(seurat, path_to_save)
+```
+    
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
