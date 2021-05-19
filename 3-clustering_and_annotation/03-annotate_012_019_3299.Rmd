@@ -92,6 +92,7 @@ s_score_ggs
 g2m_score_ggs
 ```
 
+
 # Find Markers
 
 ```{r}
@@ -121,6 +122,20 @@ saveRDS(
   markers_list,
   here::here("3-clustering_and_annotation/tmp/markers_richter.rds")
 )
+
+
+# Split into lists of data.frames
+markers_dfs_list <- list()
+for (patient in names(markers_list)) {
+  clusters <- unique(markers_list[[patient]]$cluster)
+  markers_dfs <- purrr::map(clusters, function(x) {
+    df <- markers_list[[patient]][markers_list[[patient]]$cluster == x, ]
+    df <- df[, c(7, 1:6)]
+    df
+  })
+  names(markers_dfs) <- clusters
+  markers_dfs_list[[patient]] <- markers_dfs
+}
 ```
 
 
@@ -250,6 +265,18 @@ In all 3 donors we have seen a a cluster of poor-quality cells, but that has a h
 
 ```{r}
 saveRDS(seurat_list, path_to_save)
+
+
+# Save markers
+walk2(markers_dfs_list, names(markers_dfs_list), function(dfs, x) {
+  path_to_save_dfs <- str_c(
+    here::here("results/tables/markers/"),
+    "markers_clusters_patient_",
+    x,
+    ".xlsx"
+  )
+  openxlsx::write.xlsx(dfs, path_to_save_dfs)
+})
 ```
 
 
