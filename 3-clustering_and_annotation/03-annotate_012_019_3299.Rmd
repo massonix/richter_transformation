@@ -244,12 +244,12 @@ DimPlot(seurat_list$`19`, cols = color_palette)
 | 2       | KLF6                      | Richter-like quiescent     |
 | 3       | mitochondrial genes       | poor-quality               |
 | 4       | MIR155HG                  | MIR155HG                   |
-| 5       | HBM/TOP2A                 | erythrocytes/proliferative |
+| 5       | HBM/TOP2A                 | erythroblast               |
 
 
 ```{r}
 annotation_3299 <- c("CXCR4+CD27-", "CXCR4-CD27+", "Richter-like quiescent",
-                    "poor-quality", "MIR155HG", "erythrocytes/proliferative")
+                    "poor-quality", "MIR155HG", "erythroblast")
 seurat_list$`3299`$seurat_clusters <- Idents(seurat_list$`3299`)
 seurat_list$`3299`$annotation <- Idents(seurat_list$`3299`)
 levels(seurat_list$`3299`$annotation) <- annotation_3299

@@ -202,6 +202,7 @@ clusters <- unique(markers_all$cluster)
 markers_dfs <- purrr::map(clusters, function(x) {
   df <- markers_all[markers_all$cluster == x, ]
   df <- df[, c(7, 1:6)]
+  df <- arrange(df, desc(avg_log2FC))
   df
 })
 names(markers_dfs) <- clusters
