@@ -1,5 +1,5 @@
 ---
-title: 'Clustering (patient 63)'
+title: 'Clustering and annotation (patient 63)'
 author: "Ramon Massoni-Badosa"
 date: "2021/04/09"
 output: 
@@ -18,7 +18,7 @@ options(width = 1200)
 
 # Introduction
 
-The purpose of this notebook is to cluster the cells obtained from patient with id 63.
+The purpose of this notebook is to cluster and annotate the cells obtained from patient with id 63.
 
 
 # Pre-processing
@@ -97,7 +97,7 @@ umap_tissue <- DimPlot(seurat, group.by = "tissue")
 umap_time_point + umap_tissue
 ```
 
-## Tissue-specific
+## Tissue-specific analysis 
 
 As we can see, the tissue of origin (peripheral blood or lymph node) is a major source of heterogeneity. Thus, we will repeat the process splitting the Seurat object by tissue:
 
@@ -195,6 +195,18 @@ DimPlot(seurat_list$LN)
 
 ```{r}
 saveRDS(seurat_list$LN, path_to_save)
+
+
+# Save markers
+clusters <- unique(markers_all$cluster)
+markers_dfs <- purrr::map(clusters, function(x) {
+  df <- markers_all[markers_all$cluster == x, ]
+  df <- df[, c(7, 1:6)]
+  df
+})
+names(markers_dfs) <- clusters
+path_to_save_dfs <- here::here("results/tables/markers/markers_clusters_patient_63.xlsx")
+openxlsx::write.xlsx(markers_dfs, file = path_to_save_dfs)
 ```
 
 

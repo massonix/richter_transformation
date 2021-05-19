@@ -26,6 +26,7 @@ The purpose of this notebook is to filter out poor quality cells and genes for t
 ## Load packages
 
 ```{r}
+library(scater)
 library(Seurat)
 library(ggpubr)
 library(tidyverse)
@@ -68,7 +69,24 @@ seurat
 In this Smart-seq2 experiment, we had a total of 12 plates. We can visualize the experimental design with the [scater](https://academic.oup.com/bioinformatics/article/33/8/1179/2907823) package. (TODO)
 
 ```{r}
-
+plates <- sort(unique(seurat$plate))
+seurat$well <- str_extract(seurat$well, "...$")
+sce <- as.SingleCellExperiment(seurat)
+plate_distrs <- map(plates, function(x){
+  curr_sce <- sce[, sce$plate == x]
+  plate_distr <- plotPlatePosition(
+    curr_sce, 
+    plate_position = curr_sce$well, 
+    colour_by = "sample_description_FN",
+    point_size = 4
+  )
+  plate_distr +
+    ggtitle(x) +
+    theme(plot.tag = element_text(hjust = 0.5),
+          legend.title = element_blank())
+})
+names(plate_distrs) <- plates
+plate_distrs
 ```
 
 
