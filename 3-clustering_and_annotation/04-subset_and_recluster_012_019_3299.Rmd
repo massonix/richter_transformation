@@ -1,5 +1,5 @@
 ---
-title: 'Clustering (level 2)'
+title: 'Subset and recluster (12, 19, 3299)'
 author: "Ramon Massoni-Badosa"
 date: "2021/04/09"
 output: 
@@ -18,11 +18,17 @@ options(width = 1200)
 TODO:
 
 - Filter out cells pct_mt > 20%
-- Normalize cells with SCTransform (we see a gradient of nFeature_RNA) ?
-- Visualize clusters proposed by Ferran (dot plot + UMAP of specific oness)
+- Visualize markers proposed by Ferran (dot plot + UMAP of specific oness)
 - Might be worth to run monocle/PAGA + phateR + velocyto
 - Find subclusters for "Richter-like" clusters
 
+TODO (25/5)
+
+- Eliminate poor-quality donor 19 (maybe change threshold?)
+- Find subcluster to find MIR155HG in CLL 19
+- Change + and - to high and low
+- Send markers to Ferran
+- Find 2 subclusters MIR155HG+MS4A1+ Richter-like CLL 19
 
 # Introduction
 
@@ -36,6 +42,7 @@ Here we will exclude the poor-quality clusters and erythrocytes that we identifi
 ```{r}
 library(Seurat)
 library(ggpubr)
+library(plotly)
 library(tidyverse)
 ```
 
@@ -45,7 +52,7 @@ library(tidyverse)
 ```{r}
 # Paths
 path_to_obj <- here::here("results/R_objects/6.seurat_list_annotated.rds")
-path_to_save <- here::here("results/R_objects/patient_63/3.seurat_list_annotated_reprocessed.rds")
+path_to_save <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_reprocessed.rds")
 
 
 # Colors
@@ -68,6 +75,7 @@ source(here::here("bin/utils.R"))
 ```{r}
 seurat_list <- readRDS(path_to_obj)
 seurat_list
+purrr::map(seurat_list, DimPlot, cols = color_palette)
 ```
 
 
@@ -130,36 +138,8 @@ umaps_n_features <- purrr::map(seurat_list, function(seurat_obj) {
 umaps_n_features
 ```
 
-Importantly, we see how inside each "blob", cells are ordered from fewest to highest counts. This might be an artifact of data normalization. To mitigate it, we will run [SCTransform](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) following [this tutorial](https://satijalab.org/seurat/archive/v3.0/sctransform_vignette
-.html).
 
-
-```{r}
-seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
-  seurat_obj <- seurat_obj %>%
-    SCTransform(vars.to.regress = "nFeature_RNA", verbose = TRUE) %>% 
-    RunPCA(verbose = FALSE) %>%
-    RunUMAP(dims = 1:20, verbose = TRUE)
-  seurat_obj
-})
-```
-
-
-UMAPs:
-
-```{r}
-umaps_annotation <- purrr::map(seurat_list, DimPlot, cols = color_palette)
-umaps_annotation
-```
-```{r}
-umaps_n_features <- purrr::map(seurat_list, function(seurat_obj) {
-  p <- FeaturePlot(seurat_obj, "nFeature_RNA") +
-    scale_color_viridis_c(option = "magma")
-})
-umaps_n_features
-```
-
-# Cluster (level 2)
+# Recluster
 
 ```{r}
 seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
@@ -168,39 +148,294 @@ seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
 })
 resolutions <- c(
   "12" = 0.3,
-  "19" = 0.4,
+  "19" = 0.45,
   "3299" = 0.3
 )
 seurat_list <- purrr::map2(seurat_list, resolutions, function(seurat_obj, res) {
   seurat_obj <- FindClusters(seurat_obj, resolution = res)
   seurat_obj
 })
-umaps_clusters <- purrr::map(seurat_list, DimPlot, cols = color_palette)
+umaps_clusters <- purrr::map(
+  seurat_list,
+  DimPlot,
+  cols = color_palette,
+  pt.size = 0.75
+)
 umaps_clusters
 ```
 
 
-Since we know that for some clusters we can find further structure, let us  run the `FindSubClusters` function.
-
+# Markers
 
 ```{r}
-# 12
-seurat_list$`12` <- FindSubCluster(
-  seurat_list$`12`,
-  graph.name = "SCT_snn",
-  cluster = "2",
-  subcluster.name = "richter_subclusters",
-  resolution = 0.4
+markers_list <- purrr::map(
+  seurat_list,
+  FindAllMarkers,
+  only.pos = TRUE,
+  logfc.threshold = 0.75
 )
-seurat_list$`12`$seurat_clusters <- seurat_list$`12`$richter_subclusters
-Idents(seurat_list$`12`) <- "seurat_clusters"
+markers_list <- purrr::map(markers_list, function(df) {
+  df <- df %>%
+    group_by(cluster) %>%
+    arrange(desc(avg_log2FC), .by_group = TRUE)
+  df[, c(7, 6, 2, 5, 3, 4)]
+})
 ```
 
 
-# Visualize additional markers
+# Reannotate
+
+## 12
+
+```{r}
+DT::datatable(markers_list$`12`)
+```
+
+
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CXCR4                     | CXCR4+CD27-                |
+| 1       | CD27                      | CXCR4-CD27+                |
+| 2       | MIF, CCND2                | Richter-like quiescent     |
+| 3       | MIR155HG, LRMP            | MIR155HG+                  |
+| 4       | TOP2A, MKI67              | Richter-like proliferative |
+| 5       | MZB1, IGHM, XBP1, CLPTM1L | MZB1+IGHM++XBP1+           |
+
+
+```{r}
+seurat_list$`12`$annotation2 <- seurat_list$`12`$seurat_clusters
+new_levels_12 <- c("CXCR4+CD27-", "CXCR4-CD27+", "Richter-like quiescent",
+                   "MIR155HG+", "Richter-like proliferative", "MZB1+IGHM++XBP1+")
+levels(seurat_list$`12`$annotation2) <- new_levels_12
+Idents(seurat_list$`12`) <- "annotation2"
+DimPlot(seurat_list$`12`, cols = color_palette, pt.size = 0.75)
+feat_plot_12 <- purrr::map(c("CXCR4", "CD27"), function(x) {
+  p <- FeaturePlot(seurat_list$`12`, features = x, pt.size = 0.75) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+feat_plot_12
+```
+
+
+Interestingly, CLL cells seem to follow a trajectory in 3D:
+
+```{r}
+seurat_list$`12` <- RunUMAP(seurat_list$`12`, dims = 1:20, n.components = 3, reduction.name = "umap_3D")
+umap_12_df <- as.data.frame(seurat_list$`12`@reductions$umap_3D@cell.embeddings)
+umap_12_df$annotation2 <- seurat_list$`12`$annotation2
+umap_12_3D <- plot_ly(
+  umap_12_df,
+  x = ~umap_3d_1,
+  y = ~umap_3d_2,
+  z = ~umap_3d_3,
+  color = ~factor(annotation2),
+  colors = color_palette,
+  size = 0.001,
+  alpha = 0.4
+)
+umap_12_3D <- umap_12_3D %>%
+  add_markers()
+umap_12_3D
+
+
+# Expression MIR155HG
+umap_12_df$MIR155HG <- seurat_list$`12`[["RNA"]]@data["MIR155HG", ]
+umap_12_mir155 <- plot_ly(
+  umap_12_df,
+  x = ~umap_3d_1,
+  y = ~umap_3d_2,
+  z = ~umap_3d_3,
+  color = ~MIR155HG,
+  size = 0.001,
+  alpha = 0.7
+)
+umap_12_mir155 <- umap_12_mir155 %>%
+  add_markers()
+umap_12_mir155
+```
+
+
+Additional markers:
 
 ```{r}
 selected_markers <- c("CD5", "CD19", "MS4A1", "CD38", "PTPRC", "NCAM1")
+dot_plot_12 <- DotPlot(
+  seurat_list$`12`,
+  features = selected_markers,
+  group.by = "annotation2"
+) +
+  labs(x = "", y = "") +
+  scale_color_viridis_c(option = "magma")
+dot_plot_12
+```
 
+
+Subcluster Richter clones:
+
+```{r}
+seurat_list$`12` <- FindSubCluster(
+  seurat_list$`12`,
+  graph.name = "RNA_snn",
+  cluster = "Richter-like quiescent",
+  subcluster.name = "richter_subclusters",
+  resolution = 0.4
+)
+DimPlot(seurat_list$`12`, group.by = "richter_subclusters")
+Idents(seurat_list$`12`) <- "richter_subclusters"
+markers_richter_subclusters <- FindMarkers(
+  seurat_list$`12`,
+  ident.1 = "Richter-like quiescent_0",
+  ident.2 = "Richter-like quiescent_1",
+  only.pos = FALSE
+)
+markers_richter_subclusters <- markers_richter_subclusters %>%
+  rownames_to_column("gene") %>%
+  arrange(desc(avg_log2FC))
+DT::datatable(markers_richter_subclusters)
+feat_plot_ccnd2 <- FeaturePlot(
+  seurat_list$`12`,
+  features = "CCND2",
+  pt.size = 0.75
+) +
+  scale_color_viridis_c(option = "magma")
+feat_plot_ccnd2
+
+
+# Final annotation
+seurat_list$`12`$annotation2 <- seurat_list$`12`$richter_subclusters
+seurat_list$`12`$richter_subclusters <- NULL
+Idents(seurat_list$`12`) <- "annotation2"
+ccnd_pos <- levels(Idents(seurat_list$`12`)) == "Richter-like quiescent_0"
+levels(Idents(seurat_list$`12`))[ccnd_pos] <- "CCND2hi Richter-like quiescent"
+ccnd_neg <- levels(Idents(seurat_list$`12`)) == "Richter-like quiescent_1"
+levels(Idents(seurat_list$`12`))[ccnd_neg] <- "CCND2lo Richter-like quiescent"
+umap_final_annotation_12 <- DimPlot(
+  seurat_list$`12`,
+  pt.size = 0.75,
+  cols = color_palette
+)
+umap_final_annotation_12
+```
+
+
+## 19
+
+```{r}
+DT::datatable(markers_list$`19`)
+```
+
+[Interesting paper on S100A4 and Richter transformation](https://ashpublications.org/blood/article-abstract/137/5/646/469830/Active-Akt-signaling-triggers-CLL-toward-Richter?redirectedFrom=fulltext).
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CD27                      | CXCR4-CD27+                |
+| 1       | CXCR4                     | CXCR4+CD27-                |
+| 2       | BIRC3                     | Richter-like quiescent     |
+| 3       | MIR155HG, MS4A1           | MIR155HG+                  |
+| 4       | NA                        | poor-quality               |
+| 5       | TOP2A, MKI67              | Richter-like proliferative |
+
+As cluster 4 does not have any distinctive marker, we will consider it as a poor-quality cluster and exclude it:
+
+```{r}
+seurat_list$`19` <- subset(seurat_list$`19`, subset = seurat_clusters != "4")
+```
+
+
+Visualize markers:
+
+```{r}
+selected_markers_19 <- c("CXCR4", "CD27", "TP53INP1", "BIRC3", "INPP5D",
+                         "UVRAG", "PIK3IP1", "MIR155HG", "MS4A1")
+feat_plot_19 <- purrr::map(selected_markers_19, function(x) {
+  p <- FeaturePlot(seurat_list$`19`, features = x, pt.size = 0.75) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+feat_plot_19
+
+
+# Reannotate
+seurat_list$`19`$annotation2 <- droplevels(seurat_list$`19`$seurat_clusters)
+new_levels_19 <- c("CXCR4-CD27+", "CXCR4+CD27-", "Richter-like quiescent",
+                   "MIR155HG+",  "Richter-like proliferative") 
+levels(seurat_list$`19`$annotation2) <- new_levels_19
+Idents(seurat_list$`19`) <- "annotation2"
+DimPlot(seurat_list$`19`, cols = color_palette, pt.size = 0.75)
+```
+
+
+3D trajectory:
+
+```{r}
+seurat_list$`19` <- RunUMAP(
+  seurat_list$`19`,
+  dims = 1:20,
+  n.components = 3,
+  reduction.name = "umap_3D"
+)
+umap_19_df <- as.data.frame(seurat_list$`19`@reductions$umap_3D@cell.embeddings)
+umap_19_df$annotation2 <- seurat_list$`19`$annotation2
+umap_19_3D <- plot_ly(
+  umap_19_df,
+  x = ~umap_3d_1,
+  y = ~umap_3d_2,
+  z = ~umap_3d_3,
+  color = ~factor(annotation2),
+  colors = color_palette,
+  size = 0.001,
+  alpha = 0.4
+)
+umap_19_3D <- umap_19_3D %>%
+  add_markers()
+umap_19_3D
+
+
+# Expression MIR155HG
+umap_19_df$MIR155HG <- seurat_list$`19`[["RNA"]]@data["MIR155HG", ]
+umap_19_mir155 <- plot_ly(
+  umap_19_df,
+  x = ~umap_3d_1,
+  y = ~umap_3d_2,
+  z = ~umap_3d_3,
+  color = ~MIR155HG,
+  size = 0.001,
+  alpha = 0.7
+)
+umap_19_mir155 <- umap_19_mir155 %>%
+  add_markers()
+umap_19_mir155
+```
+
+
+Subcluster:
+
+```{r}
+seurat_list$`19` <- FindSubCluster(
+  seurat_list$`19`,
+  graph.name = "RNA_snn",
+  cluster = "MIR155HG+",
+  subcluster.name = "richter_subclusters",
+  resolution = 0.4
+)
+DimPlot(seurat_list$`19`, group.by = "richter_subclusters")
+```
+
+
+## 3299
+
+# Save
+
+```{r}
+saveRDS(seurat_list, path_to_save)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
 ```
 
