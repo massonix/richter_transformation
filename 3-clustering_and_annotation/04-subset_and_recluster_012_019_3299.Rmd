@@ -1,0 +1,206 @@
+---
+title: 'Clustering (level 2)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+TODO:
+
+- Filter out cells pct_mt > 20%
+- Normalize cells with SCTransform (we see a gradient of nFeature_RNA) ?
+- Visualize clusters proposed by Ferran (dot plot + UMAP of specific oness)
+- Might be worth to run monocle/PAGA + phateR + velocyto
+- Find subclusters for "Richter-like" clusters
+
+
+# Introduction
+
+Here we will exclude the poor-quality clusters and erythrocytes that we identified previously. Subsequently, we will reprocess each patient-specific Seurat object including feature selection, principal component analysis (PCA) and UMAP.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(ggpubr)
+library(tidyverse)
+```
+
+
+## Parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/6.seurat_list_annotated.rds")
+path_to_save <- here::here("results/R_objects/patient_63/3.seurat_list_annotated_reprocessed.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+# QC thresholds
+max_pct_mt <- 20
+
+
+# Functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat_list <- readRDS(path_to_obj)
+seurat_list
+```
+
+
+# Exclude clusters
+
+```{r}
+exclude_clusters <- list(
+  "12" = c("poor-quality", "erythrocytes"),
+  "19" = c("poor-quality", "erythrocytes"),
+  "3299" = c("poor-quality", "erythroblast")
+)
+seurat_list <- purrr::map2(seurat_list, exclude_clusters, function(seurat_obj, x) {
+  selected_cells <- colnames(seurat_obj)[!(seurat_obj$annotation %in% x)]
+  seurat_obj <- subset(seurat_obj, cells = selected_cells)
+  seurat_obj$annotation <- droplevels(seurat_obj$annotation)
+  seurat_obj
+})
+```
+
+
+In addition, we have seen that we were too permissive with the threshold of mitochondrial expression, since poor-quality cells were clustering together. Thus, we will apply a new cutoff:
+
+```{r}
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- subset(seurat_obj, subset = pct_mt <= max_pct_mt)
+  seurat_obj
+})
+```
+
+
+# Reprocess
+
+```{r}
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- seurat_obj %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    RunUMAP(dims = 1:20, reduction = "pca")
+  seurat_obj
+})
+```
+
+
+UMAPs:
+
+```{r}
+umaps_annotation <- purrr::map(
+  seurat_list,
+  DimPlot,
+  cols = color_palette, pt.size = 0.8
+)
+umaps_annotation
+```
+```{r}
+umaps_n_features <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, "nFeature_RNA", pt.size = 0.8) +
+    scale_color_viridis_c(option = "magma")
+})
+umaps_n_features
+```
+
+Importantly, we see how inside each "blob", cells are ordered from fewest to highest counts. This might be an artifact of data normalization. To mitigate it, we will run [SCTransform](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) following [this tutorial](https://satijalab.org/seurat/archive/v3.0/sctransform_vignette
+.html).
+
+
+```{r}
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- seurat_obj %>%
+    SCTransform(vars.to.regress = "nFeature_RNA", verbose = TRUE) %>% 
+    RunPCA(verbose = FALSE) %>%
+    RunUMAP(dims = 1:20, verbose = TRUE)
+  seurat_obj
+})
+```
+
+
+UMAPs:
+
+```{r}
+umaps_annotation <- purrr::map(seurat_list, DimPlot, cols = color_palette)
+umaps_annotation
+```
+```{r}
+umaps_n_features <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, "nFeature_RNA") +
+    scale_color_viridis_c(option = "magma")
+})
+umaps_n_features
+```
+
+# Cluster (level 2)
+
+```{r}
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- FindNeighbors(seurat_obj, dims = 1:20)
+  seurat_obj
+})
+resolutions <- c(
+  "12" = 0.3,
+  "19" = 0.4,
+  "3299" = 0.3
+)
+seurat_list <- purrr::map2(seurat_list, resolutions, function(seurat_obj, res) {
+  seurat_obj <- FindClusters(seurat_obj, resolution = res)
+  seurat_obj
+})
+umaps_clusters <- purrr::map(seurat_list, DimPlot, cols = color_palette)
+umaps_clusters
+```
+
+
+Since we know that for some clusters we can find further structure, let us  run the `FindSubClusters` function.
+
+
+```{r}
+# 12
+seurat_list$`12` <- FindSubCluster(
+  seurat_list$`12`,
+  graph.name = "SCT_snn",
+  cluster = "2",
+  subcluster.name = "richter_subclusters",
+  resolution = 0.4
+)
+seurat_list$`12`$seurat_clusters <- seurat_list$`12`$richter_subclusters
+Idents(seurat_list$`12`) <- "seurat_clusters"
+```
+
+
+# Visualize additional markers
+
+```{r}
+selected_markers <- c("CD5", "CD19", "MS4A1", "CD38", "PTPRC", "NCAM1")
+
+```
+
