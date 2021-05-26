@@ -15,20 +15,12 @@ knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center',
 options(width = 1200)
 ```
 
-TODO:
-
-- Filter out cells pct_mt > 20%
-- Visualize markers proposed by Ferran (dot plot + UMAP of specific oness)
-- Might be worth to run monocle/PAGA + phateR + velocyto
-- Find subclusters for "Richter-like" clusters
 
 TODO (25/5)
 
-- Eliminate poor-quality donor 19 (maybe change threshold?)
-- Find subcluster to find MIR155HG in CLL 19
 - Change + and - to high and low
-- Send markers to Ferran
-- Find 2 subclusters MIR155HG+MS4A1+ Richter-like CLL 19
+- Weighted GO enrichment analysis ?
+
 
 # Introduction
 
@@ -149,7 +141,7 @@ seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
 resolutions <- c(
   "12" = 0.3,
   "19" = 0.45,
-  "3299" = 0.3
+  "3299" = 0.35
 )
 seurat_list <- purrr::map2(seurat_list, resolutions, function(seurat_obj, res) {
   seurat_obj <- FindClusters(seurat_obj, resolution = res)
@@ -413,18 +405,275 @@ umap_19_mir155
 Subcluster:
 
 ```{r}
+# Since we excluded a cluster, we need to recompute the KNN graph
+seurat_list$`19` <- FindNeighbors(seurat_list$`19`, dims = 1:20)
 seurat_list$`19` <- FindSubCluster(
   seurat_list$`19`,
   graph.name = "RNA_snn",
   cluster = "MIR155HG+",
-  subcluster.name = "richter_subclusters",
-  resolution = 0.4
+  subcluster.name = "MIR155HG_subclusters",
+  resolution = 0.3
 )
-DimPlot(seurat_list$`19`, group.by = "richter_subclusters")
+DimPlot(
+  seurat_list$`19`,
+  group.by = "MIR155HG_subclusters",
+  cols = color_palette
+)
+Idents(seurat_list$`19`) <- "MIR155HG_subclusters"
+mir155_categories <- c("MIR155HG+_0", "MIR155HG+_1", "MIR155HG+_2")
+markers_MIR155HG_subclusters <- purrr::map(mir155_categories, function(x) {
+  df <- FindMarkers(
+    seurat_list$`19`,
+    ident.1 = x,
+    ident.2 = mir155_categories[which(mir155_categories != x)],
+    only.pos = TRUE,
+    logfc.threshold = 0.5
+  )
+  df <- df %>%
+    rownames_to_column("gene") %>%
+    arrange(desc(avg_log2FC))
+})
+names(markers_MIR155HG_subclusters) <- mir155_categories
+print("markers MIR155HG+_0")
+DT::datatable(markers_MIR155HG_subclusters$`MIR155HG+_0`)
+print("markers MIR155HG+_1")
+DT::datatable(markers_MIR155HG_subclusters$`MIR155HG+_1`)
+print("markers MIR155HG+_2")
+DT::datatable(markers_MIR155HG_subclusters$`MIR155HG+_2`)
+```
+
+
+[A nice review on the role of CCR7 in CLL pathophisiology](https://www.frontiersin.org/articles/10.3389/fimmu.2021.662866/full).
+
+Of note, cluster "MIR155HG+_2" can be split into CCND2+CDK6+SOX4+ and a TRPM4+ cluster:
+
+```{r}
+selected_markers_19_2 <- c("CCND2", "CDK6", "SOX4", "TRPM4")
+feat_plot_19_2 <- purrr::map(selected_markers_19_2, function(x) {
+  p <- FeaturePlot(seurat_list$`19`, features = x, pt.size = 0.75) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+feat_plot_19_2
+```
+
+
+Final annotation:
+
+```{r}
+seurat_list$`19`$MIR155HG_subclusters <- as.factor(seurat_list$`19`$MIR155HG_subclusters)
+new_levels_19_2 <- c("CXCR4-CD27+", "CXCR4+CD27-", "MIR155HGhi CD20hi Richter-like quiescent",
+                     "MIR155HGhi CLL-like", "CCND2hiTRPMhi", "Richter-like proliferative",
+                     "TP53INP1hi Richter-like quiescent")
+levels(seurat_list$`19`$MIR155HG_subclusters) <- new_levels_19_2
+seurat_list$`19`$annotation2 <- seurat_list$`19`$MIR155HG_subclusters
+seurat_list$`19`$MIR155HG_subclusters <- NULL
+Idents(seurat_list$`19`) <- "annotation2"
+DimPlot(seurat_list$`19`, cols = color_palette, pt.size = 0.75)
 ```
 
 
 ## 3299
+
+```{r}
+DT::datatable(markers_list$`3299`)
+```
+
+[Interesting paper on S100A4 and Richter transformation](https://ashpublications.org/blood/article-abstract/137/5/646/469830/Active-Akt-signaling-triggers-CLL-toward-Richter?redirectedFrom=fulltext).
+
+| Cluster | Markers                   | Annotation                          |
+|---------|---------------------------|-------------------------------------|
+| 0       | CXCR4                     | CXCR4+CD27-                         |
+| 1       | CD27                      | CXCR4-CD27+                         |
+| 2       | ANKRD11                   | Richter-like                        | 
+| 3       | S1004                     | CD27+S100A4+ (can be further split) |
+| 4       | PPP1R15A                  | Richter-like                        |
+| 5       | MIR155HG                  | MIR155HGhi                          |
+
+
+Clusters 2 and 4 are both Richter-like and they show distinctive markers. However, it is hard to make sense of them, so for now we will group them in a single category. On the other hand, clusters 1 and 3 both express CD27, but cluster 3 also expresses S100A4. In addition, a subcluster of cluster 3 is clearly MIR155HG+. To be consistent with the previous annotations, we will separate the MIR155HG+ and label the rest as CXCR4-CD27+.
+
+
+```{r}
+selected_markers_3299 <- c("CXCR4", "CD27", "ANKRD11", "S100A4", "PPP1R15A",
+                           "MIR155HG", "CD83", "CD69")
+feat_plot_3299 <- purrr::map(selected_markers_3299, function(x) {
+  p <- FeaturePlot(seurat_list$`3299`, features = x, pt.size = 0.75) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+feat_plot_3299
+```
+
+
+First annotation:
+
+```{r}
+new_levels_3299 <- c("CXCR4+CD27-", "CXCR4-CD27+", "Richter-like",
+                     "CD27+S100A4+", "Richter-like", "MIR155HGhi")
+seurat_list$`3299`$annotation2 <- seurat_list$`3299`$seurat_clusters
+levels(seurat_list$`3299`$annotation2) <- new_levels_3299
+DimPlot(seurat_list$`3299`, group.by = "annotation2")
+```
+
+
+3D trajectory:
+
+```{r}
+seurat_list$`3299` <- RunUMAP(
+  seurat_list$`3299`,
+  dims = 1:20,
+  n.components = 3,
+  reduction.name = "umap_3D"
+)
+umap_3299_df <- as.data.frame(seurat_list$`3299`@reductions$umap_3D@cell.embeddings)
+umap_3299_df$annotation2 <- seurat_list$`3299`$annotation2
+umap_3299_3D <- plot_ly(
+  umap_3299_df,
+  x = ~umap_3d_1,
+  y = ~umap_3d_2,
+  z = ~umap_3d_3,
+  color = ~factor(annotation2),
+  colors = color_palette,
+  size = 0.001,
+  alpha = 0.4
+)
+umap_3299_3D <- umap_3299_3D %>%
+  add_markers()
+umap_3299_3D
+
+
+# Expression MIR155HG
+umap_3299_df$MIR155HG <- seurat_list$`3299`[["RNA"]]@data["MIR155HG", ]
+umap_3299_mir155 <- plot_ly(
+  umap_3299_df,
+  x = ~umap_3d_1,
+  y = ~umap_3d_2,
+  z = ~umap_3d_3,
+  color = ~MIR155HG,
+  size = 0.001,
+  alpha = 0.7
+)
+umap_3299_mir155 <- umap_3299_mir155 %>%
+  add_markers()
+umap_3299_mir155
+```
+
+
+Subcluster:
+
+```{r}
+# S100A4
+Idents(seurat_list$`3299`) <- "annotation2"
+seurat_list$`3299` <- FindSubCluster(
+  seurat_list$`3299`,
+  graph.name = "RNA_snn",
+  cluster = "CD27+S100A4+",
+  subcluster.name = "S100A4_subclusters",
+  resolution = 0.3
+)
+DimPlot(
+  seurat_list$`3299`,
+  group.by = "S100A4_subclusters",
+  cols = color_palette
+)
+Idents(seurat_list$`3299`) <- "S100A4_subclusters"
+
+
+# Markers
+markers_S100A4 <- FindMarkers(
+  seurat_list$`3299`,
+  ident.1 = "CD27+S100A4+_0",
+  ident.2 = "CD27+S100A4+_1",
+  only.pos = FALSE,
+  logfc.threshold = 0.5
+)
+markers_S100A4 <- markers_S100A4 %>%
+  rownames_to_column("gene") %>%
+  arrange(desc(avg_log2FC))
+DT::datatable(markers_S100A4)
+
+
+# DEA between both MIR155HG+ clusters
+markers_mir155_3299 <- FindMarkers(
+  seurat_list$`3299`,
+  ident.1 = "MIR155HGhi",
+  ident.2 = "CD27+S100A4+_1",
+  only.pos = FALSE,
+  logfc.threshold = 0.5
+)
+DT::datatable(markers_mir155_3299)
+seurat_list$`3299`$S100A4_subclusters <- as.factor(seurat_list$`3299`$S100A4_subclusters)
+new_levels_3299_2 <- c("CD27+S100A4+", "CD83hiMIR155HGhi", "CXCR4-CD27+",
+                       "CXCR4+CD27-", "CD83loMIR155HGhi", "Richter-like")
+levels(seurat_list$`3299`$S100A4_subclusters) <- new_levels_3299_2
+seurat_list$`3299`$annotation2 <- seurat_list$`3299`$S100A4_subclusters
+seurat_list$`3299`$S100A4_subclusters <- NULL
+DimPlot(
+  seurat_list$`3299`,
+  group.by = "annotation2",
+  cols = color_palette
+)
+
+
+# MIR155HG
+Idents(seurat_list$`3299`) <- "annotation2"
+seurat_list$`3299` <- FindSubCluster(
+  seurat_list$`3299`,
+  graph.name = "RNA_snn",
+  cluster = "CD83loMIR155HGhi",
+  subcluster.name = "MIR155HG_subclusters",
+  resolution = 0.1
+)
+DimPlot(
+  seurat_list$`3299`,
+  group.by = "MIR155HG_subclusters",
+  cols = color_palette
+)
+Idents(seurat_list$`3299`) <- "MIR155HG_subclusters"
+markers_mir155_3299_2 <- FindMarkers(
+  seurat_list$`3299`,
+  ident.1 = "CD83loMIR155HGhi_0",
+  ident.2 = "CD83loMIR155HGhi_1",
+  only.pos = FALSE,
+  logfc.threshold = 0.5
+)
+DT::datatable(markers_mir155_3299_2)
+
+
+# CD83loMIR155HGhi_1 is a poor-quality cluster: exclude
+FeaturePlot(seurat_list$`3299`, "pct_mt") +
+  scale_color_viridis_c(option = "magma")
+seurat_list$`3299` <- subset(
+  seurat_list$`3299`,
+  subset = MIR155HG_subclusters != "CD83loMIR155HGhi_1"
+)
+Idents(seurat_list$`3299`) <- "annotation2"
+seurat_list$`3299`$MIR155HG_subclusters <- NULL
+DimPlot(
+  seurat_list$`3299`,
+  group.by = "annotation2",
+  cols = color_palette
+)
+```
+
+
+# Final observations
+
+We have observed that the gene ENO1 is overexpressed in both MIR155HG+ and Richter clusters for all 3 patients:
+
+```{r}
+umaps_eno1 <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, features = "ENO1", pt.size = 0.75) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+umaps_eno1
+```
+
+
+Strikingly, [a study in Oncotarget](https://pubmed.ncbi.nlm.nih.gov/27906678/) showed that ENO1 is upregulated in the proliferating B-cell fraction of CLL lymph nodes, and anti-ENO1 antibodies are prevalent in sera from patients with progressive disease and their presence is predictive of a shorter time to first treatment.
+
 
 # Save
 
