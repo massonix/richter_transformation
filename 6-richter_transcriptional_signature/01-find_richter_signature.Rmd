@@ -1,0 +1,132 @@
+---
+title: 'Clonal evolution'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to assess the transcriptional signature associated with Richter transformation.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(UpSetR)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_reprocessed.rds")
+path_to_obj_63 <-  here::here("results/R_objects/patient_63/3.seurat_LN_annotated.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat_list <- readRDS(path_to_obj)
+seurat_63 <- readRDS(path_to_obj_63)
+seurat_list <- c(seurat_list, "63" = seurat_63)
+seurat_list
+```
+
+
+# Differential expression analysis
+
+```{r}
+seurat_list$`12`$annotation_final <- Idents(seurat_list$`12`)
+seurat_list$`19`$annotation_final <- Idents(seurat_list$`19`)
+seurat_list$`3299`$annotation_final <- Idents(seurat_list$`3299`)
+seurat_list$`63`$annotation_final <- Idents(seurat_list$`63`)
+
+comparisons <- list(
+  "12" = list(
+    richter = c("CCND2lo Richter-like quiescent", "CCND2hi Richter-like quiescent"),
+    cll = c("CXCR4-CD27+", "CXCR4+CD27-", "MIR155HG+", "MZB1+IGHM++XBP1+")
+  ),
+  "19" = list(
+    richter = c("TP53INP1hi Richter-like quiescent", "MIR155HGhi CD20hi Richter-like quiescent"),
+    cll = c("CXCR4-CD27+", "CXCR4+CD27-", "MIR155HGhi CLL-like")
+  ),
+  "3299" = list(
+    richter = c("Richter-like"),
+    cll = c("CD27+S100A4+", "CD83hiMIR155HGhi", "CXCR4-CD27+", "CXCR4+CD27-", "CD83loMIR155HGhi")
+  ),
+  "63" = list(
+    richter = c("Richter-like"),
+    cll = c("CXCR4+ CLL-like")
+  )
+)
+dea <- purrr::map(names(comparisons), function(x) {
+  print(x)
+  seurat_obj <- seurat_list[[x]]
+  Idents(seurat_obj) <- "annotation_final"
+  df <- FindMarkers(
+    seurat_obj,
+    ident.1 = comparisons[[x]][["richter"]],
+    ident.2 = comparisons[[x]][["cll"]],
+    only.pos = FALSE,
+    logfc.threshold = 0.3
+  )
+  df <- df %>%
+    rownames_to_column("gene") %>%
+    filter(p_val_adj < 0.001)
+}) 
+names(dea) <- names(comparisons)
+upregulated_richter <- purrr::map(dea, function(df) {
+  genes <- df %>%
+    filter(avg_log2FC > 0) %>%
+    arrange(desc(avg_log2FC)) %>%
+    pull("gene")
+  genes
+})
+downregulated_richter <- purrr::map(dea, function(df) {
+  genes <- df %>%
+    filter(avg_log2FC < 0) %>%
+    arrange(avg_log2FC) %>%
+    pull("gene")
+  genes
+})
+
+```
+
+
+# Upset plots
+
+```{r}
+upset(fromList(upregulated_richter), order.by = "freq")
+```
+
