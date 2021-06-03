@@ -95,3 +95,40 @@ process_seurat <- function(seurat_obj, dims = 1:30) {
     RunUMAP(reduction = "pca", dim = dims)
   seurat_obj
 }
+
+
+plot_split_umap <- function(seurat_obj, var) {
+  df <- as.data.frame(seurat_obj@reductions$umap@cell.embeddings)
+  df$new_var <- seurat_obj@meta.data[[var]]
+  p <- df %>%
+    ggplot(aes(UMAP_1, UMAP_2, color = new_var)) +
+    geom_point(size = 0.1) +
+    facet_wrap(~new_var) +
+    theme_classic() +
+    theme(legend.position = "none")
+  p
+}
+
+
+run_enrichr <- function(x,
+                        database = "GO_Biological_Process_2018",
+                        max_total_genes,
+                        max_enriched_genes,
+                        p_adj_threshold,
+                        min_odds_ratio) {
+  go <- enrichr(genes = x, databases = database)
+  go <- go[[database]]
+  go <- separate(
+    go,
+    col = "Overlap",
+    sep = "/",
+    into = c("n_genes_enriched", "n_genes_total")
+  )
+  selected_terms <- 
+    go$n_genes_total < max_total_genes &
+    go$n_genes_enriched >= max_enriched_genes &
+    go$Adjusted.P.value < p_adj_threshold &
+    go$Odds.Ratio > min_odds_ratio
+  go <- go[selected_terms, ]
+  go
+}
