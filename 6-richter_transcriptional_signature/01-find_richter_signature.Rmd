@@ -30,6 +30,8 @@ library(Seurat)
 library(SeuratWrappers)
 library(harmony)
 library(UpSetR)
+library(enrichR)
+library(ggrepel)
 library(tidyverse)
 ```
 
@@ -51,6 +53,18 @@ color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
 
 # Source functions
 source(here::here("bin/utils.R"))
+
+
+# Thresholds
+alpha <- 0.001
+min_avg_log2FC <- 0.25
+selected_avg_log2FC <- 1.25
+selected_pct_cells <- 10
+selected_significance_alpha <- alpha
+GO_max_total_genes <- 250
+GO_min_enriched_genes <- 3
+GO_p_adj_threshold <- 0.01
+GO_min_odds_ratio <- 2.5
 ```
 
 
@@ -99,34 +113,197 @@ dea <- purrr::map(names(comparisons), function(x) {
     ident.1 = comparisons[[x]][["richter"]],
     ident.2 = comparisons[[x]][["cll"]],
     only.pos = FALSE,
-    logfc.threshold = 0.3
+    logfc.threshold = 0
   )
-  df <- df %>%
-    rownames_to_column("gene") %>%
-    filter(p_val_adj < 0.001)
+  df <- rownames_to_column(df, "gene")
+  df
 }) 
 names(dea) <- names(comparisons)
-upregulated_richter <- purrr::map(dea, function(df) {
-  genes <- df %>%
-    filter(avg_log2FC > 0) %>%
-    arrange(desc(avg_log2FC)) %>%
-    pull("gene")
-  genes
+dea <- purrr::map(names(dea), function(x) {
+  df <- dea[[x]]
+  df$direction <- case_when(
+    df$p_val_adj < alpha & df$avg_log2FC > min_avg_log2FC ~ "up",
+    df$p_val_adj < alpha & df$avg_log2FC < 0 & abs(df$avg_log2FC) > min_avg_log2FC ~ "down"
+  )
+  df$direction[is.na(df$direction)] <- "not sig."
+  pct_cells <- rowMeans(seurat_list[[x]][["RNA"]]@counts > 0) * 100
+  df$pct_cells_expressing <- pct_cells[df$gene]
+  df
 })
-downregulated_richter <- purrr::map(dea, function(df) {
-  genes <- df %>%
-    filter(avg_log2FC < 0) %>%
-    arrange(avg_log2FC) %>%
-    pull("gene")
-  genes
-})
-
+names(dea) <- names(comparisons)
+upregulated_richter <- purrr::map(dea, function(df) df$gene[df$direction == "up"])
+downregulated_richter <- purrr::map(dea, function(df) df$gene[df$direction == "down"])
 ```
 
 
 # Upset plots
 
 ```{r}
-upset(fromList(upregulated_richter), order.by = "freq")
+upset_upregulated <- upset(fromList(upregulated_richter), order.by = "freq")
+upset_downregulated <- upset(fromList(downregulated_richter), order.by = "freq")
+upset_upregulated
+upset_downregulated
+```
+
+
+# MA plots
+
+TODO: add titles + visualize FC > 1:
+
+```{r fig.wide=TRUE}
+ma_plots <- purrr::map(dea, function(df) {
+  p <- ma_plot(
+    df,
+    selected_avg_log2FC = selected_avg_log2FC,
+    selected_pct_cells = selected_pct_cells,
+    selected_significance_alpha = selected_significance_alpha
+  )
+  p
+})
+ma_plots
+```
+
+* KLF6: [Assignment of the human B-cell-derived (BCD1) proto-oncogene to 10p14-p15 ](https://www.sciencedirect.com/science/article/abs/pii/S0888754397948242?via%3Dihub)
+* [TCL1A and ATM are co-expressed in chronic lymphocytic leukemia cells without deletion of 11q](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3561435/).
+* [The regulatory interaction of EVI1 with the TCL1A oncogene impacts cell survival and clinical outcome in CLL](https://www.nature.com/articles/leu2015114)
+
+
+# Gene ontology enrichment analysis
+
+## EnrichR
+
+### Patient-specific richter GO enrichment
+
+```{r}
+# Run enrichR
+go_patient_specific <- purrr::map(
+  list(upregulated_richter, downregulated_richter),
+  function(gene_sets) {
+    go_out <- purrr::map(gene_sets, function(x) {
+      df <- run_enrichr(
+        x,
+        max_total_genes = GO_max_total_genes,
+        min_enriched_genes = GO_min_enriched_genes,
+        p_adj_threshold = GO_p_adj_threshold,
+        min_odds_ratio = GO_min_odds_ratio
+      )
+      df
+    })
+})
+
+
+# Visualize upregulated GO terms
+names(go_patient_specific) <- c("upregulated", "downregulated")
+DT::datatable(go_patient_specific$upregulated$`12`)
+DT::datatable(go_patient_specific$upregulated$`19`)
+DT::datatable(go_patient_specific$upregulated$`3299`)
+DT::datatable(go_patient_specific$upregulated$`63`)
+
+
+# Visualize downregulated GO terms
+DT::datatable(go_patient_specific$downregulated$`12`)
+DT::datatable(go_patient_specific$downregulated$`19`)
+DT::datatable(go_patient_specific$downregulated$`3299`)
+DT::datatable(go_patient_specific$downregulated$`63`)
+```
+
+
+### Common DEG in patients 12 and 63
+
+```{r}
+# Common in donors 63 and 12
+upregulated_12_63 <- intersect(
+  upregulated_richter$`12`,
+  upregulated_richter$`63`
+)
+downregulated_12_63 <- intersect(
+  downregulated_richter$`12`,
+  downregulated_richter$`63`
+)
+go_12_63_up <- run_enrichr(
+  upregulated_12_63,
+  max_total_genes = GO_max_total_genes,
+  min_enriched_genes = GO_min_enriched_genes,
+  p_adj_threshold = GO_p_adj_threshold,
+  min_odds_ratio = GO_min_odds_ratio
+)
+go_12_63_down <- run_enrichr(
+  downregulated_12_63,
+  max_total_genes = GO_max_total_genes,
+  min_enriched_genes = GO_min_enriched_genes,
+  p_adj_threshold = GO_p_adj_threshold,
+  min_odds_ratio = GO_min_odds_ratio
+)
+DT::datatable(go_12_63_up)
+DT::datatable(go_12_63_down)
+```
+[Wnt signalling pathways in chronic lymphocytic leukaemia and B‐cell lymphomas](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5727250/)
+
+```{r}
+> DotPlot(seurat_list$`12`, features = "WNT3")
+> DotPlot(seurat_list$`19`, features = "WNT3")
+> DotPlot(seurat_list$`3299`, features = "WNT3")
+> DotPlot(seurat_list$`63`, features = "WNT3")
+```
+
+
+Worth noting, B cell activation is downregulated upon Richter Transformation. This seems counter-intuitive, so we need to check it in more detail.
+
+```{r}
+VlnPlot(seurat_list$`63`, c("IGHM", "IGHG1"), group.by = "annotation_final", pt.size = 0.1)
+FeaturePlot(seurat_list$`12`, "IGHA1")
+```
+
+
+### Found in at least two sets
+
+```{r}
+# Up
+all_genes <- Reduce(union, upregulated_richter)
+n_sets_all <- map_dbl(all_genes, function(x) {
+  n_sets <- sum(
+    map_lgl(
+      upregulated_richter,
+      function(gene_set) x %in% gene_set
+    )
+  )
+  n_sets
+})
+upregulated_2_or_more <- all_genes[n_sets_all >= 2]
+go_2_or_more_up <- run_enrichr(
+  upregulated_2_or_more,
+  max_total_genes = GO_max_total_genes,
+  min_enriched_genes = GO_min_enriched_genes,
+  p_adj_threshold = GO_p_adj_threshold,
+  min_odds_ratio = GO_min_odds_ratio
+)
+DT::datatable(go_2_or_more_up)
+
+
+# Down
+n_sets_all_down <- map_dbl(all_genes, function(x) {
+  n_sets <- sum(
+    map_lgl(
+      downregulated_richter,
+      function(gene_set) x %in% gene_set
+    )
+  )
+  n_sets
+})
+downregulated_2_or_more <- all_genes[n_sets_all_down >= 2]
+go_2_or_more_down <- run_enrichr(
+  downregulated_2_or_more,
+  max_total_genes = GO_max_total_genes,
+  min_enriched_genes = GO_min_enriched_genes,
+  p_adj_threshold = GO_p_adj_threshold,
+  min_odds_ratio = GO_min_odds_ratio
+)
+DT::datatable(go_2_or_more_down)
+```
+
+# Session Information
+
+```{r}
+sessionInfo()
 ```
 

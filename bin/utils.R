@@ -113,7 +113,7 @@ plot_split_umap <- function(seurat_obj, var) {
 run_enrichr <- function(x,
                         database = "GO_Biological_Process_2018",
                         max_total_genes,
-                        max_enriched_genes,
+                        min_enriched_genes,
                         p_adj_threshold,
                         min_odds_ratio) {
   go <- enrichr(genes = x, databases = database)
@@ -126,9 +126,56 @@ run_enrichr <- function(x,
   )
   selected_terms <- 
     go$n_genes_total < max_total_genes &
-    go$n_genes_enriched >= max_enriched_genes &
+    go$n_genes_enriched >= min_enriched_genes &
     go$Adjusted.P.value < p_adj_threshold &
     go$Odds.Ratio > min_odds_ratio
   go <- go[selected_terms, ]
+  go <- arrange(go, desc(Odds.Ratio))
   go
+}
+
+
+ma_plot <- function(df,
+                    point_size = 0.75,
+                    point_alpha = 0.8,
+                    cols = c("#cc3536", "#2d63a1", "gray"),
+                    selected_avg_log2FC,
+                    selected_pct_cells,
+                    selected_significance_alpha,
+                    text_size = 2.5,
+                    max_overlaps = 20) {
+  p <- df %>%
+    mutate(direction = factor(
+      direction,
+      levels = c("up", "down", "not sig.")
+    )) %>%
+    ggplot(aes(pct_cells_expressing, avg_log2FC, color = direction)) +
+    geom_point(size = point_size, alpha = point_alpha) +
+    scale_color_manual(values = c("#cc3536", "#2d63a1", "gray")) +
+    labs(
+      x = "Percent Expressed (%)",
+      y = "Mean log2(RT / CLL)",
+      color = ""
+    ) +
+    theme_bw() +
+    theme(
+      axis.title = element_text(size = 11),
+      axis.text = element_text(size = 10),
+      legend.text = element_text(size = 11)
+    ) +
+    guides(colour = guide_legend(override.aes = list(size = 2)))
+  selected_data <- df %>%
+    filter(
+      abs(avg_log2FC) >= selected_avg_log2FC &
+        pct_cells_expressing > selected_pct_cells &
+        p_val_adj < selected_significance_alpha
+    )
+  p +
+    geom_text_repel(
+      data = selected_data,
+      aes(label = gene),
+      color = "black",
+      size = 2.5,
+      max.overlaps = 20
+    )
 }
