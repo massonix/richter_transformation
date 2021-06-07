@@ -15,6 +15,9 @@ knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center',
 options(width = 1200)
 ```
 
+TODO:
+- Look at the RT HTO expression of the "seed" cells. If they are indeed not true doublets, the HTO expression should not be in the right tail of the distribution.
+
 
 # Introduction
 
@@ -27,6 +30,7 @@ The purpose of this notebook is to ensure that the Richter-like cells predicted 
 
 ```{r}
 library(Seurat)
+library(ggpubr)
 library(tidyverse)
 ```
 
@@ -35,8 +39,9 @@ library(tidyverse)
 
 ```{r}
 path_to_obj <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_reprocessed.rds")
-path_to_obj_63 <-  here::here("results/R_objects/patient_63/3.seurat_LN_annotated.rds")
 path_to_demultiplex <- here::here("results/R_objects/demultiplexed")
+path_to_libraries_metadata <- here::here("1-cellranger_mapping/data/richter_metadata.csv")
+path_to_sample_metdata <- here::here("data/sample_metadata_FN.csv")
 
 
 # Colors
@@ -55,9 +60,23 @@ source(here::here("bin/utils.R"))
 
 ```{r}
 seurat_list <- readRDS(path_to_obj)
-seurat_63 <- readRDS(path_to_obj_63)
-seurat_list <- c(seurat_list, "63" = seurat_63)
+seurat_list$`12`$annotation_final <- Idents(seurat_list$`12`)
+seurat_list$`19`$annotation_final <- Idents(seurat_list$`19`)
+seurat_list$`3299`$annotation_final <- Idents(seurat_list$`3299`)
+seurat_list$`3299`$is_richter <- ifelse(
+  seurat_list$`3299`$time_point %in% c("T2", "T3"),
+  TRUE,
+  FALSE
+)
 seurat_list
+umaps_annotation <- purrr::map(
+  seurat_list,
+  DimPlot,
+  cols = color_palette,
+  pt.size = 0.5,
+  group.by = "annotation_final"
+)
+umaps_annotation
 
 
 # Load demultiplexed files (with doublets)
@@ -67,21 +86,19 @@ gem_ids <- list.files(path_to_demultiplex, full.names = FALSE) %>%
   str_remove("_demultiplexed.rds$")
 names(files_to_load) <- gem_ids
 seurat_demultiplexed <- purrr::map(files_to_load, readRDS)
+
+
+# Load metadata files
+libraries_metadata <- read_csv(path_to_libraries_metadata)
+samples_metadata <- read_csv(path_to_sample_metdata)
+DT::datatable(libraries_metadata)
+DT::datatable(samples_metadata)
 ```
 
 
 # Keep RT-CLL doublets and subset
 
 ```{r}
-richter_ids <- c(
-  "ICGC-365-15-194",
-  "ICGC-01918-3879A",
-  "ICGC-012-19-4600B",
-  "ICGC-3299-17-251",
-  "ICGC-3299-18-218A",
-  "ICGC-3299-18-5761A"
-)
-
 # Merge demultiplexed patient-specific objects
 seurat_demultiplexed_12 <- merge(
   x = seurat_demultiplexed$r65huxjg_g0itbe2k,
@@ -103,12 +120,118 @@ seurat_demultiplexed <- list(
 
 
 # Keep only RT-CLL doublets
+richter_ids <- c(
+  "ICGC-365-15-194",
+  "ICGC-01918-3879A",
+  "ICGC-012-19-4600B",
+  "ICGC-3299-17-251",
+  "ICGC-3299-18-218A",
+  "ICGC-3299-18-5761A"
+)
 seurat_demultiplexed <- purrr::map(seurat_demultiplexed, function(seurat_obj) {
   selected_cells <- 
-    (seurat_obj$HTO_maxID %in% richter_ids | seurat_obj$HTO_secondID %in% richter_ids) &
+    (seurat_obj$HTO_maxID %in% richter_ids |
+    seurat_obj$HTO_secondID %in% richter_ids) &
     seurat_obj$HTO_classification.global == "Doublet"
   seurat_obj <- subset(seurat_obj, cells = colnames(seurat_obj)[selected_cells])
+  seurat_obj[["HTO"]] <- NULL
   seurat_obj
 })
+```
+
+
+# Merge RT-CLL doublets and processed datasets
+
+```{r}
+seurat_list_all <- purrr::map(names(seurat_list), function(x) {
+  seurat_processed <- seurat_list[[x]]
+  seurat_doublets <- seurat_demultiplexed[[x]]
+  seurat_processed@reductions$pca <- NULL
+  seurat_processed@reductions$harmony <- NULL
+  seurat_processed@reductions$umap <- NULL
+  seurat_processed@reductions$umap_3D <- NULL
+  seurat_processed$donor_id <- x
+  seurat_doublets$donor_id <- x
+  seurat_processed$is_doublet <- FALSE
+  seurat_doublets$is_doublet <- TRUE
+  seurat_doublets$annotation_final <- "RT-CLL doublet"
+  seurat_doublets$time_point <- "RT-CLL doublet"
+  seurat_doublets$is_richter <- NA
+  selected_cols <- c("donor_id", "is_doublet", "annotation_final", "time_point",
+                     "is_richter")
+  seurat_doublets@meta.data <- seurat_doublets@meta.data[, selected_cols]
+  seurat_processed@meta.data <- seurat_processed@meta.data[, selected_cols]
+  output <- merge(x = seurat_processed, y = seurat_doublets)
+  output
+})
+names(seurat_list_all) <- names(seurat_list)
+```
+
+
+# Reprocess merged objects
+
+```{r}
+rm(seurat_demultiplexed)
+rm(seurat_list)
+rm(seurat_demultiplexed_12)
+rm(seurat_demultiplexed_19)
+rm(seurat_demultiplexed_3299)
+seurat_list_all <- purrr::map(seurat_list_all, function(seurat_obj) {
+  seurat_obj <- seurat_obj %>%
+    NormalizeData(
+      normalization.method = "LogNormalize",
+      scale.factor = 10000
+    ) %>% 
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    RunUMAP(dims = 1:20, reduction = "pca")
+  seurat_obj
+})
+```
+
+
+# Plot
+
+```{r}
+richter_annotations <- c(
+  "CCND2hi Richter-like quiescent",
+  "CCND2lo Richter-like quiescent",
+  "Richter-like proliferative",
+  "TP53INP1hi Richter-like quiescent",
+  "MIR155HGhi CD20hi Richter-like quiescent",
+  "Richter-like proliferative",
+  "Richter-like"
+)
+
+
+# Visualize final annotation
+umaps_annotation <- purrr::map(
+  seurat_list_all,
+  DimPlot,
+  cols = color_palette,
+  pt.size = 0.5,
+  group.by = "annotation_final"
+)
+umaps_annotation
+
+
+# Split UMAP by background, "seed cells" and RT-CLL doublets
+umap_doublets <- purrr::map(seurat_list_all, function(seurat_obj) {
+  seurat_obj$is_confounded <- case_when(
+    seurat_obj$is_doublet ~ "RT-CLL doublet",
+    seurat_obj$is_richter == FALSE & seurat_obj$annotation_final %in% richter_annotations ~ "RT seed cells"
+  )
+  seurat_obj$is_confounded[is.na(seurat_obj$is_confounded)] <- "Background"
+  plot_split_umap(seurat_obj, "is_confounded")
+})
+umap_doublets
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
 ```
 
