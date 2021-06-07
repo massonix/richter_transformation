@@ -1,0 +1,114 @@
+---
+title: 'Clonal evolution'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to ensure that the Richter-like cells predicted at the initial time points of the disease do not correspond to doublets. To that end, we will merge the RT-CLL predicted doublets detected by cell hashing with the filtered Seurat objects. This ground-truth doublets should cluster at the interface between CLL and RT clusters, while the RT-like cells should be embedded in the clusters.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+path_to_obj <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_reprocessed.rds")
+path_to_obj_63 <-  here::here("results/R_objects/patient_63/3.seurat_LN_annotated.rds")
+path_to_demultiplex <- here::here("results/R_objects/demultiplexed")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat_list <- readRDS(path_to_obj)
+seurat_63 <- readRDS(path_to_obj_63)
+seurat_list <- c(seurat_list, "63" = seurat_63)
+seurat_list
+
+
+# Load demultiplexed files (with doublets)
+files_to_load <- list.files(path_to_demultiplex, full.names = TRUE)
+gem_ids <- list.files(path_to_demultiplex, full.names = FALSE) %>%
+  str_remove("^seurat_") %>%
+  str_remove("_demultiplexed.rds$")
+names(files_to_load) <- gem_ids
+seurat_demultiplexed <- purrr::map(files_to_load, readRDS)
+```
+
+
+# Keep RT-CLL doublets and subset
+
+```{r}
+richter_ids <- c(
+  "ICGC-365-15-194",
+  "ICGC-01918-3879A",
+  "ICGC-012-19-4600B",
+  "ICGC-3299-17-251",
+  "ICGC-3299-18-218A",
+  "ICGC-3299-18-5761A"
+)
+
+# Merge demultiplexed patient-specific objects
+seurat_demultiplexed_12 <- merge(
+  x = seurat_demultiplexed$r65huxjg_g0itbe2k,
+  y = seurat_demultiplexed$bco1we6n_qaz6s7wd
+)
+seurat_demultiplexed_19 <- merge(
+  x = seurat_demultiplexed$te04uhdq_2uatjn5y,
+  y = seurat_demultiplexed$j7z61du3_vyxon6q4
+)
+seurat_demultiplexed_3299 <- merge(
+  x = seurat_demultiplexed$p092mcjf_6w9km8re,
+  y = seurat_demultiplexed$z97dxyfq_xi38kvhc
+)
+seurat_demultiplexed <- list(
+  "12" = seurat_demultiplexed_12,
+  "19" = seurat_demultiplexed_19,
+  "3299" = seurat_demultiplexed_3299
+)
+
+
+# Keep only RT-CLL doublets
+seurat_demultiplexed <- purrr::map(seurat_demultiplexed, function(seurat_obj) {
+  selected_cells <- 
+    (seurat_obj$HTO_maxID %in% richter_ids | seurat_obj$HTO_secondID %in% richter_ids) &
+    seurat_obj$HTO_classification.global == "Doublet"
+  seurat_obj <- subset(seurat_obj, cells = colnames(seurat_obj)[selected_cells])
+  seurat_obj
+})
+```
+
