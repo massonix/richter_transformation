@@ -99,7 +99,6 @@ DT::datatable(samples_metadata)
 # Keep RT-CLL doublets and subset
 
 ```{r}
-# Merge demultiplexed patient-specific objects
 seurat_demultiplexed_12 <- merge(
   x = seurat_demultiplexed$r65huxjg_g0itbe2k,
   y = seurat_demultiplexed$bco1we6n_qaz6s7wd
@@ -117,10 +116,12 @@ seurat_demultiplexed <- list(
   "19" = seurat_demultiplexed_19,
   "3299" = seurat_demultiplexed_3299
 )
+rm(seurat_demultiplexed_12)
+rm(seurat_demultiplexed_19)
+rm(seurat_demultiplexed_3299)
 
 
-# Keep only RT-CLL doublets
-richter_ids <- c(
+richter_samples <- c(
   "ICGC-365-15-194",
   "ICGC-01918-3879A",
   "ICGC-012-19-4600B",
@@ -128,72 +129,6 @@ richter_ids <- c(
   "ICGC-3299-18-218A",
   "ICGC-3299-18-5761A"
 )
-seurat_demultiplexed <- purrr::map(seurat_demultiplexed, function(seurat_obj) {
-  selected_cells <- 
-    (seurat_obj$HTO_maxID %in% richter_ids |
-    seurat_obj$HTO_secondID %in% richter_ids) &
-    seurat_obj$HTO_classification.global == "Doublet"
-  seurat_obj <- subset(seurat_obj, cells = colnames(seurat_obj)[selected_cells])
-  seurat_obj[["HTO"]] <- NULL
-  seurat_obj
-})
-```
-
-
-# Merge RT-CLL doublets and processed datasets
-
-```{r}
-seurat_list_all <- purrr::map(names(seurat_list), function(x) {
-  seurat_processed <- seurat_list[[x]]
-  seurat_doublets <- seurat_demultiplexed[[x]]
-  seurat_processed@reductions$pca <- NULL
-  seurat_processed@reductions$harmony <- NULL
-  seurat_processed@reductions$umap <- NULL
-  seurat_processed@reductions$umap_3D <- NULL
-  seurat_processed$donor_id <- x
-  seurat_doublets$donor_id <- x
-  seurat_processed$is_doublet <- FALSE
-  seurat_doublets$is_doublet <- TRUE
-  seurat_doublets$annotation_final <- "RT-CLL doublet"
-  seurat_doublets$time_point <- "RT-CLL doublet"
-  seurat_doublets$is_richter <- NA
-  selected_cols <- c("donor_id", "is_doublet", "annotation_final", "time_point",
-                     "is_richter")
-  seurat_doublets@meta.data <- seurat_doublets@meta.data[, selected_cols]
-  seurat_processed@meta.data <- seurat_processed@meta.data[, selected_cols]
-  output <- merge(x = seurat_processed, y = seurat_doublets)
-  output
-})
-names(seurat_list_all) <- names(seurat_list)
-```
-
-
-# Reprocess merged objects
-
-```{r}
-rm(seurat_demultiplexed)
-rm(seurat_list)
-rm(seurat_demultiplexed_12)
-rm(seurat_demultiplexed_19)
-rm(seurat_demultiplexed_3299)
-seurat_list_all <- purrr::map(seurat_list_all, function(seurat_obj) {
-  seurat_obj <- seurat_obj %>%
-    NormalizeData(
-      normalization.method = "LogNormalize",
-      scale.factor = 10000
-    ) %>% 
-    FindVariableFeatures() %>%
-    ScaleData() %>%
-    RunPCA() %>%
-    RunUMAP(dims = 1:20, reduction = "pca")
-  seurat_obj
-})
-```
-
-
-# Plot
-
-```{r}
 richter_annotations <- c(
   "CCND2hi Richter-like quiescent",
   "CCND2lo Richter-like quiescent",
@@ -203,29 +138,88 @@ richter_annotations <- c(
   "Richter-like proliferative",
   "Richter-like"
 )
-
-
-# Visualize final annotation
-umaps_annotation <- purrr::map(
-  seurat_list_all,
-  DimPlot,
-  cols = color_palette,
-  pt.size = 0.5,
-  group.by = "annotation_final"
-)
-umaps_annotation
-
-
-# Split UMAP by background, "seed cells" and RT-CLL doublets
-umap_doublets <- purrr::map(seurat_list_all, function(seurat_obj) {
-  seurat_obj$is_confounded <- case_when(
-    seurat_obj$is_doublet ~ "RT-CLL doublet",
-    seurat_obj$is_richter == FALSE & seurat_obj$annotation_final %in% richter_annotations ~ "RT seed cells"
-  )
-  seurat_obj$is_confounded[is.na(seurat_obj$is_confounded)] <- "Background"
-  plot_split_umap(seurat_obj, "is_confounded")
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj$annotation_final <- as.character(seurat_obj$annotation_final)
+  seurat_obj
 })
+seurat_demultiplexed2 <- purrr::map(names(seurat_list), function(x) {
+  rt_cll_doublets <- 
+    (seurat_demultiplexed[[x]]$HTO_maxID %in% richter_samples |
+       seurat_demultiplexed[[x]]$HTO_secondID %in% richter_samples) &
+    seurat_demultiplexed[[x]]$HTO_classification.global == "Doublet"
+  rt_cll_doublets <- colnames(seurat_demultiplexed[[x]])[rt_cll_doublets]
+  rt_seed_cells <- 
+    seurat_list[[x]]$is_richter == FALSE &
+    seurat_list[[x]]$annotation_final %in% richter_annotations
+  rt_seed_cells <- colnames(seurat_list[[x]])[rt_seed_cells]
+  background_cells <- !(colnames(seurat_list[[x]]) %in% rt_seed_cells)
+  background_cells <- colnames(seurat_list[[x]])[background_cells]
+  selected_cells <- Reduce(
+    union,
+    list(rt_cll_doublets, rt_seed_cells, background_cells)
+  )
+  seurat_obj <- subset(seurat_demultiplexed[[x]], cells = selected_cells)  
+  seurat_obj$gem_id <- str_sub(colnames(seurat_obj), start = 1, end = 17)
+  seurat_obj$classification <- case_when(
+    colnames(seurat_obj) %in% rt_cll_doublets ~ "RT-CLL doublets",
+    colnames(seurat_obj) %in% rt_seed_cells ~ "RT seeds",
+    colnames(seurat_obj) %in% background_cells ~ "Background",
+  )
+  seurat_obj$annotation_final <- "unannotated"
+  seurat_obj$annotation_final[background_cells] <- seurat_list[[x]]$annotation_final[background_cells]
+  seurat_obj$annotation_final[rt_seed_cells] <- seurat_list[[x]]$annotation_final[rt_seed_cells]
+  seurat_obj$annotation_final[rt_cll_doublets] <- "RT-CLL doublets"
+  seurat_obj$donor_id <- x
+  Idents(seurat_obj) <- "annotation_final"
+  seurat_obj
+})
+names(seurat_demultiplexed2) <- names(seurat_list)
+rm(seurat_demultiplexed)
+```
+
+
+# Reprocess merged objects
+
+```{r fig.wide=TRUE}
+seurat_demultiplexed2 <- purrr::map(seurat_demultiplexed2, NormalizeData)
+seurat_demultiplexed2 <- purrr::map(
+  seurat_demultiplexed2,
+  process_seurat,
+  dims = 1:20
+)
+purrr::map(seurat_demultiplexed2, DimPlot, pt.size = 0.5, cols = color_palette)
+```
+
+# Plot
+
+First, we will assess whether Richter transformation (RT) "seed" cells colocalize with doublets:
+
+```{r}
+# Split UMAP by background, "seed cells" and RT-CLL doublets
+umap_doublets <- purrr::map(
+  seurat_demultiplexed2,
+  plot_split_umap,
+  var = "classification"
+)
 umap_doublets
+```
+
+# Hashtag Oligonucleotide distribution
+
+Next, we seek to elucidate the HTO of the RT samples in seed cells. RT seed cells which, by definition, are classified as singlets of a non-RT time-point. Thus, if they are not doublets they should not have a significantly higher expression of the RT HTO:
+
+```{r}
+seurat_demultiplexed2 
+seurat_obj <- seurat_demultiplexed2$`12`
+DefaultAssay(seurat_obj) <- "HTO"
+selected_features <- rownames(seurat_obj)[rownames(seurat_obj) %in% richter_samples]
+seurat_obj <- subset(seurat_obj,  features = selected_features)
+seurat_obj$richter_hto <- seurat_obj[["HTO"]]@data[1, ]
+p <- seurat_obj@meta.data %>%
+  ggplot(aes(classification, richter_hto)) +
+    geom_violin() +
+    theme_bw()
+p
 ```
 
 

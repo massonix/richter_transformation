@@ -38,51 +38,7 @@ library(tidyverse)
 path_to_obj <- here::here("results/R_objects/4.seurat_leukemic.rds")
 ```
 
-TODO: organize
-
-```{r}
-seurat_29 <- subset(seurat, subset = subproject == "BCLLATLAS_29")
-seurat_list_29 <- SplitObject(seurat_29, split.by = "donor_id") 
-seurat_list_29 <- seurat_list_29[c("12", "19")]
-
-
-library(harmony)
-library(SeuratWrappers)
-
-
-# Define query and reference
-query <- seurat_list_29$`19`
-reference <- seurat_list$`19`
-# query <- Seurat::DietSeurat(query)
-# reference <- Seurat::DietSeurat(reference)
-
-# Integrate
-anchors <- FindTransferAnchors(
-  reference = reference,
-  query = query,
-  dims = 1:20,
-  reference.reduction = "pca"
-)
-predictions <- TransferData(
-  anchorset = anchors,
-  refdata = reference$annotation_final,
-  dims = 1:20
-)
-query <- AddMetaData(query, metadata = predictions)
-DimPlot(query, group.by = "predicted.id")
-
-
-# Map to UMAP
-query2 <- MapQuery(
-  anchorset = anchors,
-  reference = reference,
-  query = query,
-  refdata = list(annotation_final = "annotation_final"),
-  reference.reduction = "pca",
-  reduction.model = "umap"
-)
-```
-
+#
 
 ## Load data
 
