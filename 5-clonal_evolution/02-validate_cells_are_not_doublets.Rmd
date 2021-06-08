@@ -15,9 +15,6 @@ knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center',
 options(width = 1200)
 ```
 
-TODO:
-- Look at the RT HTO expression of the "seed" cells. If they are indeed not true doublets, the HTO expression should not be in the right tail of the distribution.
-
 
 # Introduction
 
@@ -31,6 +28,7 @@ The purpose of this notebook is to ensure that the Richter-like cells predicted 
 ```{r}
 library(Seurat)
 library(ggpubr)
+library(ggridges)
 library(tidyverse)
 ```
 
@@ -42,6 +40,8 @@ path_to_obj <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_
 path_to_demultiplex <- here::here("results/R_objects/demultiplexed")
 path_to_libraries_metadata <- here::here("1-cellranger_mapping/data/richter_metadata.csv")
 path_to_sample_metdata <- here::here("data/sample_metadata_FN.csv")
+path_to_richter_signature <- here::here("results/R_objects/richter_signatures_list.rds")
+path_to_cll_signature <- here::here("results/R_objects/cll_signatures_list.rds")
 
 
 # Colors
@@ -93,6 +93,11 @@ libraries_metadata <- read_csv(path_to_libraries_metadata)
 samples_metadata <- read_csv(path_to_sample_metdata)
 DT::datatable(libraries_metadata)
 DT::datatable(samples_metadata)
+
+
+# Load signatures
+richter_signatures <- readRDS(path_to_richter_signature)
+cll_signatures <- readRDS(path_to_cll_signature)
 ```
 
 
@@ -228,6 +233,7 @@ violin_plots_12_19 <- purrr::map(
         theme(legend.position = "none")
     p
   })
+violin_plots_12_19
 
 
 # Ridge plots
@@ -255,9 +261,45 @@ density_plots_12_19
 
 Finally, we will score each cell with a RT or CLL-specific signature, which we calculated in another notebook. If the RT seed cells are truly Richter-like, they should have a high RT signature and low CLL signature. On the other hand, if they are RT-CLL doublets, they will have an intermediate signature in both:
 
+```{r fig.wide=TRUE}
+# Calculate signatures
+patients <- names(seurat_demultiplexed2)
+seurat_demultiplexed2 <- purrr::map(patients, function(x) {
+  seurat_obj <- seurat_demultiplexed2[[x]]
+  DefaultAssay(seurat_obj) <- "RNA"
+  seurat_obj <- AddModuleScore(
+    seurat_obj,
+    features = list(
+      cll_signature = cll_signatures[[x]],
+      richter_signature = richter_signatures[[x]]
+    ),
+    name = c("cll_signature", "richter_signature")
+  )
+  seurat_obj
+})
+names(seurat_demultiplexed2) <- patients
 
-```{r}
 
+# Plot
+violin_plots_signatures <- purrr::map(
+  seurat_demultiplexed2,
+  function(seurat_obj) {
+    cll_p <- seurat_obj@meta.data %>%
+      ggplot(aes(classification, cll_signature1, fill = classification)) +
+        geom_violin() +
+        labs(x = "", y = "CLL signature score") +
+        theme_bw() +
+        theme(legend.position = "none")
+    richter_p <- seurat_obj@meta.data %>%
+      ggplot(aes(classification, richter_signature2, fill = classification)) +
+        geom_violin() +
+        labs(x = "", y = "Richter signature score") +
+        theme_bw() +
+        theme(legend.position = "none")
+    output <- ggarrange(plotlist = list(cll_p, richter_p), ncol = 2)
+    output
+})
+violin_plots_signatures
 ```
 
 
