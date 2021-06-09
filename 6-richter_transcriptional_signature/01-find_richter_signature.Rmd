@@ -31,6 +31,8 @@ library(SeuratWrappers)
 library(harmony)
 library(UpSetR)
 library(enrichR)
+library(clusterProfiler)
+library(org.Hs.eg.db)
 library(ggrepel)
 library(tidyverse)
 ```
@@ -42,6 +44,8 @@ library(tidyverse)
 # Paths
 path_to_obj <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_reprocessed.rds")
 path_to_obj_63 <-  here::here("results/R_objects/patient_63/3.seurat_LN_annotated.rds")
+path_to_save_richter_signature <- here::here("results/R_objects/richter_signatures_list.rds")
+path_to_save_cll_signature <- here::here("results/R_objects/cll_signatures_list.rds")
 
 
 # Colors
@@ -65,6 +69,8 @@ GO_max_total_genes <- 250
 GO_min_enriched_genes <- 3
 GO_p_adj_threshold <- 0.01
 GO_min_odds_ratio <- 2.5
+max_gs_size <- 250
+min_gs_size <- 10
 ```
 
 
@@ -300,6 +306,50 @@ go_2_or_more_down <- run_enrichr(
 )
 DT::datatable(go_2_or_more_down)
 ```
+
+
+## Gene set enrichment analysis (GSEA)
+
+We know that the results of a GO analysis are sensitive to the tool or statistical method used. Thus, to increase the reliability we will also run a [Gene set enrichment analysis](https://yulab-smu.top/clusterProfiler-book/chapter5.html#go-gene-set-enrichment-analysis) with [clusterProfiler](https://yulab-smu.top/clusterProfiler-book/index.html).
+
+
+```{r}
+set.seed(1234)
+gsea_patient_specific <- purrr::map(dea, function(df) {
+  df <- arrange(df, desc(avg_log2FC))
+  gene_list <- df$avg_log2FC
+  names(gene_list) <- df$gene
+  gsea_results <- gseGO(
+    gene_list,
+    ont = "BP",
+    OrgDb = org.Hs.eg.db,
+    keyType = "SYMBOL",
+    minGSSize = min_gs_size,
+    maxGSSize = max_gs_size,
+    seed = TRUE
+  )
+  gsea_results <- clusterProfiler::simplify(gsea_results, cutoff = 0.5)
+  gsea_results <- gsea_results@result %>%
+    arrange(desc(NES))
+  gsea_results
+})
+```
+
+
+Importantly, we see that some RT have an increased mitochondrial respiration. Of note, several studies link mitochondrial metabolism with CLL and/or DLBCL:
+
+* [Targeting metabolism and survival in chronic lymphocytic leukemia and Richter syndrome cells by a novel NF-κB inhibitor](https://haematologica.org/article/view/8251).
+* [Mitochondrial and glycolytic metabolic compartmentalization in diffuse large B-cell lymphoma](https://www.sciencedirect.com/science/article/abs/pii/S0093775417301355?via%3Dihub).
+* [Differential contribution of the mitochondrial translation pathway to the survival of diffuse large B-cell lymphoma subsets](https://www.nature.com/articles/cdd2016116).
+
+
+# Save
+
+```{r}
+saveRDS(upregulated_richter, path_to_save_richter_signature)
+saveRDS(downregulated_richter, path_to_save_cll_signature)
+```
+
 
 # Session Information
 
