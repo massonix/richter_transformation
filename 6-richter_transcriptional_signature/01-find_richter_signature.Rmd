@@ -328,11 +328,54 @@ gsea_patient_specific <- purrr::map(dea, function(df) {
     maxGSSize = max_gs_size,
     seed = TRUE
   )
-  gsea_results <- clusterProfiler::simplify(gsea_results, cutoff = 0.5)
-  gsea_results <- gsea_results@result %>%
+  gsea_results <- clusterProfiler::simplify(gsea_results, cutoff = 0.35)
+  gsea_results@result <- gsea_results@result %>%
     arrange(desc(NES))
   gsea_results
 })
+DT::datatable(gsea_patient_specific$`12`@result)
+DT::datatable(gsea_patient_specific$`19`@result)
+DT::datatable(gsea_patient_specific$`3299`@result)
+DT::datatable(gsea_patient_specific$`63`@result)
+
+
+# Plot
+dot_plots_gsea <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- clusterProfiler::dotplot(obj, showCategory = 40, color = "p.adjust")
+  p +
+    theme(axis.text.y = element_text(size = 9))
+})
+oxphos_gg <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0006119",
+    by = "runningScore",
+    title = "oxidative phosphorylation"
+  )
+  p
+})
+mitochondrial_translation_gg <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0032543",
+    by = "runningScore",
+    title = "mitochondrial translation"
+  )
+  p
+})
+bcr_gg <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0050853",
+    by = "runningScore",
+    title = "BCR signaling"
+  )
+  p
+})
+FeaturePlot(seurat_list$`12`, "WNT3") +
+  scale_color_viridis_c(option = "magma")
+FeaturePlot(seurat_list$`63`, "WNT3") +
+  scale_color_viridis_c(option = "magma")
 ```
 
 
@@ -341,6 +384,25 @@ Importantly, we see that some RT have an increased mitochondrial respiration. Of
 * [Targeting metabolism and survival in chronic lymphocytic leukemia and Richter syndrome cells by a novel NF-κB inhibitor](https://haematologica.org/article/view/8251).
 * [Mitochondrial and glycolytic metabolic compartmentalization in diffuse large B-cell lymphoma](https://www.sciencedirect.com/science/article/abs/pii/S0093775417301355?via%3Dihub).
 * [Differential contribution of the mitochondrial translation pathway to the survival of diffuse large B-cell lymphoma subsets](https://www.nature.com/articles/cdd2016116).
+
+
+# Calculate signatures
+
+```{r}
+signatures <- list(
+  b_cell_signaling = gsea_patient_specific$`12`@geneSets$`GO:0050853`,
+  oxphos = gsea_patient_specific$`12`@geneSets$`GO:0006119`,
+  mitochondrial_translation = gsea_patient_specific$`12`@geneSets$`GO:0032543`
+)
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- AddModuleScore(
+    seurat_obj,
+    features = signatures,
+    name = names(signatures)
+  )
+  seurat_obj
+})
+```
 
 
 # Save
