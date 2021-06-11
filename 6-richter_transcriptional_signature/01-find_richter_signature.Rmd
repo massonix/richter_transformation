@@ -34,6 +34,7 @@ library(enrichR)
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(ggrepel)
+library(ggforce)
 library(tidyverse)
 ```
 
@@ -402,6 +403,81 @@ seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
   )
   seurat_obj
 })
+```
+
+Is the OXPHOS signature of patients 12 and 63 already present at diagnosis, or is it an acquired resistance mechanism against BTK inhibitors?
+
+```{r}
+Idents(seurat_list$`12`) <- "annotation_final"
+Idents(seurat_list$`63`) <- "annotation_final"
+richter_annotations <- c(
+  "CCND2hi Richter-like quiescent",
+  "CCND2lo Richter-like quiescent",
+  "Richter-like proliferative",
+  "Richter-like"
+)
+signatures_vars <- c("b_cell_signaling1", "oxphos2", "mitochondrial_translation3")
+signatures_titles <- c(
+  "BCR Signaling Score",
+  "OXPHOS Score",
+  "Mitochondrial Translation Score"
+)
+color_violin <- c("#dcdddc", "#cd8899")
+signatures_violin_p <- purrr::map(c("12", "63"), function(patient) {
+  seurat_obj <- seurat_list[[patient]]
+  seurat_obj$is_richter_like <- ifelse(
+    seurat_obj$annotation_final %in% richter_annotations,
+    "Richter-like",
+    "CLL-like"
+  )
+  ps <- purrr::map2(signatures_vars, signatures_titles, function(var, y_lab) {
+    p <- seurat_obj@meta.data %>%
+      mutate(sample_description2 = str_c(
+        time_point,
+        sample_description,
+        sep = "_"
+      ))  %>% 
+      ggplot(aes_string(
+        "sample_description2",
+        var,
+        fill = "is_richter_like",
+        color = "is_richter_like"
+      )) +
+        geom_violin(alpha = 0.35) +
+        geom_sina(size = 0.5, alpha = 1) +
+        scale_color_manual(values = color_violin) +
+        scale_fill_manual(values = color_violin) +
+        labs(title = x, x = "", y = y_lab, color = "", fill = "") +
+        theme_bw() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"),
+          plot.title = element_text(size = 12, hjust = 0.5)
+        )
+    p
+  })
+  out <- ggarrange(plotlist = ps, ncol = 3, common.legend = TRUE)
+  out
+})
+seurat_list$`12`$is_richter_like <- ifelse(
+  seurat_list$`12`$annotation_final %in% richter_annotations,
+  "Richter-like",
+  "CLL-like"
+)
+seurat_list$`12`@meta.data %>%
+  mutate(sample_description2 = str_c(
+    time_point,
+    sample_description_FN,
+    sep = "_"
+  ))  %>% 
+  ggplot(aes(sample_description2, oxphos2, fill = is_richter_like, color = is_richter_like)) +
+    geom_violin(alpha = 0.35) +
+    geom_sina(size = 0.5, alpha = 1) +
+    scale_color_manual(values = c("#dcdddc", "#cd8899")) +
+    scale_fill_manual(values = c("#dcdddc", "#cd8899")) +
+    labs(x = "", y = "OXPHOS score", color = "", fill = "") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"))
+
 ```
 
 
