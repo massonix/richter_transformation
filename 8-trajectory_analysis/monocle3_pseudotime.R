@@ -102,3 +102,52 @@ umap_pseudotime_gg
 #   p
 # })
 # plots
+
+################################################################################
+################################################################################
+
+seurat <- readRDS("results/R_objects/Seurat_slingshot.rds")
+DimPlot(seurat)
+cds <- as.cell_data_set(seurat)
+cds <- align_cds(cds, alignment_group = "donor_id")
+cds <- reduce_dimension(cds)
+cds <- learn_graph(cds = cds, use_partition = TRUE)
+plot_cells(cds, color_cells_by = "seurat_clusters")
+
+####################################################
+
+seurat <- readRDS("results/R_objects/Seurat_slingshot.rds")
+seurat_list <- SplitObject(seurat, split.by = "donor_id")
+for (i in seq_along(seurat_list)) {
+  seurat_list[[i]] <- seurat_list[[i]] %>%
+    NormalizeData() %>%
+    FindVariableFeatures()
+}
+features <- SelectIntegrationFeatures(seurat_list)
+for (i in seq_along(along.with = seurat_list)) {
+  seurat_list[[i]] <- seurat_list[[i]] %>%
+    ScaleData(features = features) %>%
+    RunPCA(features = features)
+}
+anchors <- FindIntegrationAnchors(seurat_list, reduction = "rpca", dims = 1:30)
+integrated <- IntegrateData(anchors, dims = 1:30)
+
+
+
+integrated <- ScaleData(integrated)
+integrated <- RunPCA(integrated)
+integrated <- RunUMAP(integrated, dims = 1:30, reduction.name = "UMAP")
+integrated <- FindNeighbors(integrated, dims = 1:30)
+integrated <- FindClusters(integrated)
+DimPlot(integrated)
+
+
+cds <- as.cell_data_set(integrated)
+cds <- cluster_cells(cds, resolution = 0.5)
+cds <- learn_graph(cds)
+plot_cells(
+  cds,
+  label_groups_by_cluster = FALSE,
+  label_leaves = FALSE,
+  label_branch_points = FALSE
+)
