@@ -35,7 +35,7 @@ library(Seurat)
 library(SeuratWrappers)
 library(harmony)
 library(ggpubr)
-library(clusterProfiler)y
+library(clusterProfiler)
 library(org.Hs.eg.db)
 library(tidyverse)
 ```
@@ -69,7 +69,7 @@ DimPlot(seurat, group.by = "annotation")
 
 # Filter data and reprocess
 
-```{r}
+```{r fig.wide=TRUE}
 # Exclude microenvironment
 selected_cells_1 <- seurat$annotation %in% c("CLL 1892", "CLL 1472", "CLL 1220")
 seurat <- subset(seurat, cells = colnames(seurat)[selected_cells_1])
@@ -164,7 +164,7 @@ markers_all <- purrr::map(
   seurat_list[c("1472", "1892")],
   FindAllMarkers,
   only.pos = FALSE,
-  logfc.threshold = 0
+  logfc.threshold = 0.1
 )
 markers_all <- purrr::map(names(markers_all), function(x) {
   df <- markers_all[[x]]
@@ -183,7 +183,7 @@ DT::datatable(markers_all$`1892`)
 
 ## Plot markers of interest
 
-```{r}
+```{r fig.wide=TRUE}
 markers_of_interest <- c("PCDH9", "TTN", "FCRL5", "BCL11A", "ATM", "CHD2",
                          "OGA", "OGT", "PAX5", "DDX17", "BACH2", "BCL2",
                          "BIRC3", "IL4R", "KMT2A", "GLUL", "S100A10")
@@ -227,8 +227,8 @@ gsea_pcdh9_clusters <- purrr::map(gene_lists, function(x) {
     arrange(desc(NES))
   gsea_results
 })
-DT::datatable(gsea_pcdh9_clusters$`1472`)
-DT::datatable(gsea_pcdh9_clusters$`1892`)
+DT::datatable(gsea_pcdh9_clusters$`1472`@result)
+DT::datatable(gsea_pcdh9_clusters$`1892`@result)
 
 
 oxphos_gg <- purrr::map(gsea_pcdh9_clusters, function(obj) {
@@ -241,16 +241,6 @@ oxphos_gg <- purrr::map(gsea_pcdh9_clusters, function(obj) {
   p
 })
 oxphos_gg
-mitochondrial_translation_gg <- purrr::map(gsea_pcdh9_clusters, function(obj) {
-  p <- gseaplot(
-    obj,
-    geneSetID = "GO:0032543",
-    by = "runningScore",
-    title = "mitochondrial translation"
-  )
-  p
-})
-mitochondrial_translation_gg
 bcr_gg <- purrr::map(gsea_pcdh9_clusters, function(obj) {
   p <- gseaplot(
     obj,
