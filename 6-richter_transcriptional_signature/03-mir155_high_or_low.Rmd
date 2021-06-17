@@ -1,0 +1,176 @@
+---
+title: 'Can we stratify patients in mir155 high or low?'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will merge all the MIR155HG+ clusters from the RT project and the [sampling artifacts project](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02032-0). Specifically, we want to see if we can easily stratify patients in "mir155hi" and mir155lo" as they did [in this paper](https://ashpublications.org/blood/article/124/4/546/33343/MicroRNA-155-influences-B-cell-receptor-signaling). MIR155HG was a strong predictor of time-to-first-treatment (TTFT), and was an independent prognostic factor to IGHV mutational status.
+
+
+# Pre-processing
+
+## Load libraries
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(ggridges)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+path_to_obj <- here::here("results/R_objects/patient_63/7.seurat_list_annotated_reprocessed.rds")
+path_to_benchmark <- here::here("results/R_objects/cll_seurat_annotated_list.rds")
+```
+
+
+## Load data
+
+```{r}
+seurat_richter <- readRDS(path_to_obj)
+seurat_benchmark <- readRDS(path_to_benchmark)
+seurat_richter$`12`$annotation_final <- Idents(seurat_richter$`12`)
+seurat_richter$`19`$annotation_final <- Idents(seurat_richter$`19`)
+seurat_richter$`3299`$annotation_final <- Idents(seurat_richter$`3299`)
+```
+
+
+# Subset to mir155
+
+```{r}
+seurat_benchmark$`1220` <- FindNeighbors(
+  seurat_benchmark$`1220`,
+  reduction = "pca",
+  dims = 1:20
+)
+seurat_benchmark[c("1472", "1892")] <- purrr::map(
+  seurat_benchmark[c("1472", "1892")],
+  FindNeighbors,
+  reduction = "harmony", 
+  dims = 1:20
+)
+resolutions <- c(0.4, 0.5, 0.5)
+seurat_benchmark <- purrr::map2(
+  seurat_benchmark,
+  resolutions,
+  function(seurat_obj, res) {
+    seurat_obj <- FindClusters(seurat_obj, resolution = res)
+    seurat_obj
+})
+purrr::map(seurat_benchmark, DimPlot)
+purrr::map(seurat_benchmark, FeaturePlot, "MIR155HG")
+mir155_clusters <- c("1220" = "1", "1472" = "3", "1892" = "4")
+
+
+# Check if mir155 clusters actually have MIR155HG as a marker
+markers_155 <- purrr::map(names(mir155_clusters), function(x) {
+  df <- FindMarkers(
+    seurat_benchmark[[x]],
+    ident.1 = mir155_clusters[x],
+    only.pos = TRUE
+  )
+  df
+})
+names(markers_155) <- names(mir155_clusters)
+purrr::map(markers_155, function(df) df["MIR155HG", ])
+
+
+# Subset all
+seurat_benchmark <- purrr::map(names(mir155_clusters), function(x) {
+  seurat_obj <- seurat_benchmark[[x]]
+  seurat_obj <- subset(seurat_obj, idents = mir155_clusters[x])
+  seurat_obj
+})
+names(seurat_benchmark) <- names(mir155_clusters)
+seurat_benchmark <- purrr::map(seurat_benchmark, function(seurat_obj) {
+  seurat_obj <- DietSeurat(seurat_obj)
+  selected_cols <- c("nCount_RNA", "nFeature_RNA", "percent_mt", "donor")
+  seurat_obj@meta.data <- seurat_obj@meta.data[, selected_cols]
+  colnames(seurat_obj@meta.data)[colnames(seurat_obj@meta.data) == "donor"] <- "donor_id"
+  colnames(seurat_obj@meta.data)[colnames(seurat_obj@meta.data) == "percent_mt"] <- "pct_mt"
+  seurat_obj
+})
+mir155_clusters_richter <- c(
+  "MIR155HG+",
+  "MIR155HGhi CLL-like",
+  "CD83hiMIR155HGhi",
+  "CD83loMIR155HGhi"
+)
+seurat_richter <- purrr::map(seurat_richter, function(seurat_obj) {
+  selected_cells <- seurat_obj$annotation_final %in% mir155_clusters_richter
+  seurat_obj <- subset(seurat_obj, cells = colnames(seurat_obj)[selected_cells])
+  seurat_obj <- DietSeurat(seurat_obj)
+  selected_cols <- c("nCount_RNA", "nFeature_RNA", "pct_mt", "donor_id")
+  seurat_obj@meta.data <- seurat_obj@meta.data[, selected_cols]
+  seurat_obj
+})
+
+
+# Merge
+seurat <- merge(
+  x = seurat_richter$`12`,
+  y = c(
+    seurat_richter$`19`,
+    seurat_richter$`3299`,
+    seurat_benchmark$`1220`,
+    seurat_benchmark$`1472`,
+    seurat_benchmark$`1892`
+  )
+)
+```
+
+
+# Process Seurat object
+
+```{r}
+seurat <- seurat %>%
+  NormalizeData() %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA() %>%
+  # RunHarmony(group.by.vars = "donor_id", dims = 1:20, reduction = "pca") %>%
+  RunUMAP(dims = 1:20, reduction = "pca")
+DotPlot(seurat, features = "MIR155HG", group.by = "donor_id") +
+  scale_color_viridis_c(option = "magma")
+VlnPlot(seurat, features = "MIR155HG", group.by = "donor_id") 
+```
+
+
+# Plot expression MIR155HG
+
+```{r}
+mir155_df <- seurat@meta.data %>%
+  select("donor_id") %>%
+  mutate(MIR155HG = seurat[["RNA"]]@data["MIR155HG", ])
+mir155_df_gg <- mir155_df %>%
+  ggplot(aes(MIR155HG, donor_id)) +
+    geom_density_ridges() +
+    theme_bw()
+mir155_df_gg
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
