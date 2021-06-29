@@ -1,0 +1,305 @@
+---
+title: 'Negative control (CLL)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will reanalyse the 3 cases of CLL that we published [in our previous study](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02032-0) to check:
+
+1. Whether we can identify a similar trajectory as we identified previously (CXCR4/CD27/MIR155HG).
+2. Whether these cells show an upregulated OXPHOS or downregulated BCR signaling.
+
+This will give us a negative control to ensure our observations are specific or not to Richter transformation.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(ggpubr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+path_to_obj <- here::here("results/R_objects/cll_seurat_annotated.rds")
+path_to_save <- here::here("results/R_objects/cll_seurat_annotated_list.rds")
+
+
+# Thresholds
+max_pct_mt <- 22.5
+min_n_features <- 600
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+colnames(seurat@meta.data)[colnames(seurat@meta.data) == "cell_type"] <- "annotation"
+DimPlot(seurat, group.by = "annotation")
+```
+
+
+# Filter data and reprocess
+
+```{r fig.wide=TRUE}
+# Exclude microenvironment
+selected_cells_1 <- seurat$annotation %in% c("CLL 1892", "CLL 1472", "CLL 1220")
+seurat <- subset(seurat, cells = colnames(seurat)[selected_cells_1])
+DimPlot(seurat)
+
+
+# Keep only cells stored at RT or 4C for <= 2h
+selected_cells_2 <- 
+  (seurat$time %in% c("0h", "2h") & seurat$temperature == "RT") |
+  (seurat$temperature == "4C")
+seurat <- subset(seurat, cells = colnames(seurat)[selected_cells_2])
+DimPlot(seurat, group.by  = "temperature")
+table(seurat$temperature, seurat$time)
+
+
+# Apply more stringent thresholds (% mitochondrial expression)
+FeatureScatter(seurat, "nFeature_RNA", "percent_mt")
+hist(seurat$percent_mt, 100)
+seurat <- subset(
+  seurat,
+  subset = percent_mt < max_pct_mt & nFeature_RNA > min_n_features
+)
+
+
+# Split by donor and reprocess
+seurat_list <- SplitObject(seurat, split.by = "donor")
+donors <- c("1220", "1472", "1892")
+seurat_list <- seurat_list[donors]
+seurat_list <- purrr::map(donors, function(x) {
+  seurat_obj <- seurat_list[[x]]
+  seurat_obj <- seurat_obj %>%
+    NormalizeData() %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA()
+  if (x == "1220") {
+    seurat_obj <- seurat_obj %>%
+      RunUMAP(reduction = "pca", dims = 1:20)
+  } else if (x %in% c("1472", "1892")) {
+    seurat_obj <- seurat_obj %>%
+      RunHarmony(
+        reduction = "pca",
+        dims = 1:20,
+        group.by.vars = "temperature"
+      ) %>% 
+      RunUMAP(reduction = "harmony", dims = 1:20)    
+  }
+  seurat_obj
+})
+names(seurat_list) <- donors
+feat_plots_1 <- purrr::map(seurat_list, function(seurat_obj) {
+  ps <- purrr::map(c("CXCR4", "CD27", "MIR155HG"), function(x) {
+    p <- FeaturePlot(seurat_obj, features = x, pt.size = 0.65) +
+      scale_color_viridis_c(option = "magma")
+  })
+  ggarrange(plotlist = ps, ncol = 3, common.legend = TRUE)
+})
+feat_plots_1
+```
+
+
+## Subcluster
+
+Overall, we can see how the main driver of variance is again the exposure to the lymph node microenvironment lymph. In the 3 donors, we see 3 main regions, with mutually exclusive expression of CXCR4, CD27 and MIR155HG.
+
+In addition, we see that for 1892 we can identify a minor subclon:
+
+```{r}
+resolutions <- c(0.2, 0.2)
+seurat_list[c("1472", "1892")] <- purrr::map2(
+  seurat_list[c("1472", "1892")], 
+  resolutions,
+  function(seurat_obj, res) {
+    seurat_obj <- FindNeighbors(
+      seurat_obj,
+      reduction = "harmony",
+      dims = 1:20
+    )
+    seurat_obj <- FindClusters(seurat_obj, resolution = res)
+    seurat_obj
+})
+DimPlot(seurat_list$`1472`)
+DimPlot(seurat_list$`1892`)
+clusters_of_interest <- list(
+  "1472" = c("1"),
+  "1892" = c("3", "4")
+)
+
+
+# Markers
+markers_all <- purrr::map(
+  seurat_list[c("1472", "1892")],
+  FindAllMarkers,
+  only.pos = FALSE,
+  logfc.threshold = 0.1
+)
+markers_all <- purrr::map(names(markers_all), function(x) {
+  df <- markers_all[[x]]
+  df <- df %>% 
+    dplyr::filter(cluster %in% clusters_of_interest[[x]], p_val_adj < 0.001) %>%
+    group_by(cluster) %>%
+    dplyr::arrange(desc(avg_log2FC), .by_group = TRUE) %>%
+    ungroup()
+  df
+})
+names(markers_all) <- names(clusters_of_interest)
+DT::datatable(markers_all$`1472`)
+DT::datatable(markers_all$`1892`)
+```
+
+
+## Plot markers of interest
+
+```{r fig.wide=TRUE}
+markers_of_interest <- c("PCDH9", "TTN", "FCRL5", "BCL11A", "ATM", "CHD2",
+                         "OGA", "OGT", "PAX5", "DDX17", "BACH2", "BCL2",
+                         "BIRC3", "IL4R", "KMT2A", "GLUL", "S100A10")
+markers_of_interest_gg <- purrr::map(markers_of_interest, function(x) {
+  ps <- purrr::map(names(seurat_list), function(donor) {
+    p <- FeaturePlot(seurat_list[[donor]], features = x, pt.size = 0.6) +
+      scale_color_viridis_c(option = "inferno") +
+      ggtitle(str_c(donor, x, sep = "_")) +
+      theme(plot.title = element_text(size = 13, hjust = 0.5))
+  })
+  out <- ggarrange(plotlist = ps, ncol = 3, common.legend = TRUE)
+})
+names(markers_of_interest_gg) <- markers_of_interest
+markers_of_interest_gg
+```
+
+
+# Gene Set Enrichment Analysis (GSEA)
+
+To shed light into the identity of these novel clusters, let us perform a GSEA with [clusterProfiler](https://www.liebertpub.com/doi/10.1089/omi.2011.0118).
+
+```{r}
+gene_lists <- list(
+  "1472" = markers_all$`1472`[markers_all$`1472`$cluster == "1", "avg_log2FC", drop = TRUE],
+  "1892" = markers_all$`1892`[markers_all$`1892`$cluster == "4", "avg_log2FC", drop = TRUE]
+)
+names(gene_lists$`1472`) <- markers_all$`1472`$gene[markers_all$`1472`$cluster == "1"]
+names(gene_lists$`1892`) <- markers_all$`1892`$gene[markers_all$`1892`$cluster == "4"]
+gsea_pcdh9_clusters <- purrr::map(gene_lists, function(x) {
+  gsea_results <- gseGO(
+    x,
+    ont = "BP",
+    OrgDb = org.Hs.eg.db,
+    keyType = "SYMBOL",
+    minGSSize = 30,
+    maxGSSize = 300,
+    seed = TRUE
+  )
+  gsea_results <- clusterProfiler::simplify(gsea_results, cutoff = 0.35)
+  gsea_results@result <- gsea_results@result %>%
+    arrange(desc(NES))
+  gsea_results
+})
+DT::datatable(gsea_pcdh9_clusters$`1472`@result)
+DT::datatable(gsea_pcdh9_clusters$`1892`@result)
+
+
+oxphos_gg <- purrr::map(gsea_pcdh9_clusters, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0006119",
+    by = "runningScore",
+    title = "oxidative phosphorylation"
+  )
+  p
+})
+oxphos_gg
+bcr_gg <- purrr::map(gsea_pcdh9_clusters, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0050853",
+    by = "runningScore",
+    title = "BCR signaling"
+  )
+  p
+})
+bcr_gg
+```
+
+
+# OXPHOS and BCR signaling signatures
+
+```{r}
+signatures <- list(
+  b_cell_signaling = gsea_pcdh9_clusters$`1892`@geneSets$`GO:0050853`,
+  oxphos = gsea_pcdh9_clusters$`1892`@geneSets$`GO:0006119`,
+  mitochondrial_translation = gsea_pcdh9_clusters$`1892`@geneSets$`GO:0032543`
+)
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- AddModuleScore(
+    seurat_obj,
+    features = signatures,
+    name = names(signatures)
+  )
+  seurat_obj
+})
+signatures_pots <- purrr::map(
+  c("b_cell_signaling1", "oxphos2", "mitochondrial_translation3"),
+  function(x) {
+    p1 <- FeaturePlot(seurat_list$`1220`, x, pt.size = 0.7) +
+      scale_color_viridis_c(option = "magma")
+    p2 <- FeaturePlot(seurat_list$`1472`, x, pt.size = 0.7) +
+      scale_color_viridis_c(option = "magma")
+    p3 <- FeaturePlot(seurat_list$`1892`, x, pt.size = 0.7) +
+      scale_color_viridis_c(option = "magma")
+    out <- ggarrange(
+      plotlist = list(p1, p2, p3),
+      ncol = 3,
+      common.legend = TRUE
+    )
+    out
+})
+signatures_pots
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat_list, path_to_save)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
