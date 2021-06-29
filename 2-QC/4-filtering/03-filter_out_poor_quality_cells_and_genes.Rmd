@@ -48,8 +48,8 @@ source(here::here("bin/utils.R"))
 
 # Thresholds
 min_lib_size <- 900
-min_n_genes <- 200
-max_pct_mt <- 30
+min_n_genes <- 250
+max_pct_mt <- 22.5
 min_cells <- 3
 ```
 
@@ -94,7 +94,7 @@ sample_metadata_df[sample_metadata_df$sample_id == "19/2768B", ]
 
 test_identifiers <- all(unique(sample_metadata_df$sample_id) %in% unique(sample_metadata_df$sample_id))
 if (test_identifiers) {
-  sample_metadata_df <- select(sample_metadata_df, - "donor_id")
+  sample_metadata_df <- dplyr::select(sample_metadata_df, - "donor_id")
   new_metadata <- seurat@meta.data %>%
     left_join(sample_metadata_df, by = "sample_id") %>%
     as.data.frame()
@@ -107,10 +107,10 @@ if (test_identifiers) {
 
 
 # Remove hashing-specific columns
-removed_vars <- c("HTO_maxID", "HTO_secondID", "HTO_margin", "HTO_classification",
-                  "HTO_classification.global")
+removed_vars <- c("HTO_margin", "HTO_classification", "HTO_classification.global")
 seurat@meta.data <- seurat@meta.data[, !(colnames(seurat@meta.data) %in% removed_vars)]
 ```
+
 
 In addition, we see that Ferran included the variable "Exclude_FN" in the metadata:
 
@@ -317,10 +317,8 @@ is_low_quality <-
   seurat$nFeature_RNA < min_n_genes |
   seurat$pct_mt > max_pct_mt
 table(is_low_quality)
-seurat$keep_cells <- !is_low_quality
-Idents(seurat) <- "keep_cells"
 seurat
-seurat <- subset(seurat, idents = TRUE)
+seurat <- subset(seurat, cells = colnames(seurat)[!is_low_quality])
 seurat
 metadata_after_qc <- seurat@meta.data
 ```
@@ -349,8 +347,6 @@ DT::datatable(qc_table)
 
 According to [Luecken MD et al.](https://www.embopress.org/doi/10.15252/msb.20188746): "A guideline to setting this threshold is to use the minimum cell cluster size that is of interest and leaving some leeway for dropout effects. For example, filtering out genes expressed in fewer than 20 cells may make it difficult to detect cell clusters with fewer than 20 cells. For datasets with high dropout rates, this threshold may also complicate the detection of larger clusters. The choice of threshold should scale with the number of cells in the dataset and the intended downstream analysis."
 
-Since we want to detect rare cell types in the tonsil, we will be very permissive and retain genes that are expressed in at least `r min_cells` cells.
-
 
 ## Set threshold
 
@@ -375,11 +371,12 @@ top_50_genes_df <- data.frame(
   gene = names(top_50_genes),
   n_cells = top_50_genes
 )
-top_50_genes_df %>%
+top_50_genes_gg <- top_50_genes_df %>%
   ggplot(aes(fct_reorder(gene, n_cells), n_cells)) +
     geom_point() +
     labs(x = "", y = "Number of expressing cells") +
     coord_flip()
+top_50_genes_gg
 ```
 
 
