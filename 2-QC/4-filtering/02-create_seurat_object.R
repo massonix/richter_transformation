@@ -85,10 +85,6 @@ for (i in 2:length(seurat_list)) {
 rm(seurat_list)
 
 
-# Remove assay containing hashtag oligonucleotide expression (HTO)
-seurat_hashed[["HTO"]] <- NULL
-
-
 # Set hashing-related variables to NA
 seurat_hashed$nCount_HTO <- NULL
 seurat_hashed$nFeature_HTO <- NULL
@@ -104,7 +100,7 @@ seurat_not_hashed$hashing_snr <- NA
 
 
 # Include donor id and library name
-metadata <- filter(metadata, type != "hashed_hto")
+metadata <- dplyr::filter(metadata, type != "hashed_hto")
 library_names <- metadata$library_name
 donor_ids <- metadata$donor_id
 names(library_names) <- metadata$gem_id
