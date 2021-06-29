@@ -18,15 +18,26 @@ path_to_save <- here::here("results/R_objects/2.seurat_unfiltered.rds")
 # Read data
 metadata <- read_csv(path_to_project_metadata)
 seurat_hashed <- readRDS(path_to_hashed)
-files_to_load <- str_subset(
-  list.dirs(path_to_not_hashed),
-  "filtered_feature_bc_matrix"
-)
+# files_to_load <- str_subset(
+#   list.dirs(path_to_not_hashed),
+#   "filtered_feature_bc_matrix"
+# )
 gem_ids_not_hashed <- list.dirs(
   path = path_to_not_hashed,
   full.names = FALSE,
   recursive = FALSE
 )
+files_to_load <- purrr::map_chr(gem_ids_not_hashed, function(x) {
+  path <- str_c(
+    path_to_not_hashed,
+    x,
+    "/",
+    x,
+    "/outs/filtered_feature_bc_matrix",
+    sep = ""
+  )
+  path
+})
 matrices_not_hashed <- purrr::map(files_to_load, Read10X)
 seurat_list <- purrr::map2(matrices_not_hashed, gem_ids_not_hashed, function(mat, x) {
   seurat_obj <- CreateSeuratObject(counts = mat)
