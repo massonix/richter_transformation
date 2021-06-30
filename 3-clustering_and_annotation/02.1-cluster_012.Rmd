@@ -1,0 +1,143 @@
+---
+title: 'Cluster tumoral cells (case 12)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will cluster the cells of the patient with id "012".
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/4.seurat_leukemic.rds")
+path_to_save <- here::here("results/R_objects/5.seurat_clustered_12.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+```
+
+  
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+```
+
+
+# Subset and reprocess
+
+Of note, everytime that we filter out a specific population, the set of highly variable genes (HVG) and the axis of variability (PCs) changes. Thus, we need to rerun the main analysis steps iteratively.
+
+First, we focus on the patient studied in this notebook:
+
+```{r}
+seurat <- subset(seurat, donor_id == "12")
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat, group.by = "subproject")
+```
+
+As we can see, there is a large batch effect between the two experiments we conducted BCLLATLAS_10 and BCLLATLAS_29. As we know, in BCLLATLAS_10 we obtain single-cell transcriptomes for serial clinical samples of 4 donors. However, as we observed that some points were underrepresented (had less cells), we performed scRNA-seq of specific cases (BCLLATLAS_29). Thus, we will initially work with BCLLATLAS_10, and use BCLLATLAS_29 later as a validation.
+
+
+```{r}
+seurat <- subset(seurat, subproject == "BCLLATLAS_10")
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat, group.by = "subproject")
+FeaturePlot(seurat, "pct_mt") +
+  scale_color_viridis_c(option = "magma")
+FeaturePlot(seurat, "nFeature_RNA") +
+  scale_color_viridis_c(option = "magma")
+```
+
+
+We see a subpopulation with characteristics of low-quality cells: high mitochondrial expression and low number of detected features (genes). Hence, let us exclude it from the dataset:
+
+```{r}
+seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:20)
+seurat <- FindClusters(seurat, resolution = 0.3)
+DimPlot(seurat)
+seurat <- subset(seurat, seurat_clusters != "4")
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat)
+DimPlot(seurat, group.by = "time_point")
+```
+
+
+# Cluster
+
+```{r}
+seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:20)
+seurat <- FindClusters(seurat, resolution = 0.3)
+DimPlot(seurat)
+```
+
+
+Notably, we observe how we can stratify cluster 2 based on CCND2 expression:
+
+```{r}
+FeaturePlot(seurat, "CCND2") + scale_color_viridis_c(option = "magma")
+seurat <- FindSubCluster(
+  seurat,
+  cluster = "2",
+  graph.name = "RNA_snn",
+  subcluster.name = "CCND2_subclusters",
+  resolution = 0.2
+)
+seurat$final_clusters <- seurat$CCND2_subclusters
+Idents(seurat) <- "final_clusters"
+DimPlot(seurat)
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat, path_to_save)
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
+
