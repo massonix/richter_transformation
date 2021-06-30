@@ -1,0 +1,150 @@
+---
+title: 'Cluster tumoral cells (case 3299)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will cluster the cells of the patient with id "3299".
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/4.seurat_leukemic.rds")
+path_to_save <- here::here("results/R_objects/5.seurat_clustered_3299.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+```
+
+  
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+```
+
+
+# Subset and reprocess
+
+Of note, everytime that we filter out a specific population, the set of highly variable genes (HVG) and the axis of variability (PCs) changes. Thus, we need to rerun the main analysis steps iteratively.
+
+First, we focus on the patient studied in this notebook:
+
+```{r}
+seurat <- subset(seurat, donor_id == "3299")
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat, group.by = "subproject")
+```
+
+In this case we only have one subproject, so we do not need to worry about batch effects. However, we see that the Richter transformation (RT) sample comes from peripheral blood (PB) whilst the other come from bone marrow (BM)
+
+```{r}
+table(seurat$sample_description_FN, seurat$tissue)
+DimPlot(seurat, group.by = "tissue")
+```
+
+
+Thus, we will focus on the samples that come from BM. Since we know that Ferran could assign 80 to 90% of the cells in post-treatment_3 to Richter cells, we will work with them and exclude the RT sample:
+
+```{r}
+seurat <- subset(seurat, tissue == "BM")
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat, group.by = "tissue")
+DimPlot(seurat, group.by = "time_point")
+FeaturePlot(seurat, "pct_mt") + scale_color_viridis_c(option = "magma")
+FeaturePlot(seurat, "nFeature_RNA") + scale_color_viridis_c(option = "magma")
+FeaturePlot(seurat, "HBM") + scale_color_viridis_c(option = "magma")
+```
+
+
+We see a subpopulation with characteristics of low-quality cells: high mitochondrial expression and low number of detected features (genes). In addition, we still see a lingering cluster of erythroblasts (HBM+). Hence, let us exclude both from the dataset:
+
+```{r}
+seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:20)
+seurat <- FindClusters(seurat, resolution = 0.75)
+DimPlot(seurat)
+selected_cells <- colnames(seurat)[!(seurat$seurat_clusters %in% c("8", "7"))]
+seurat <- subset(seurat, cells = selected_cells)
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat)
+DimPlot(seurat, group.by = "time_point")
+```
+
+
+# Cluster
+
+```{r}
+seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:20)
+seurat <- FindClusters(seurat, resolution = 0.3)
+DimPlot(seurat)
+```
+
+
+Cluster 2 can be further stratified:
+
+```{r}
+seurat <- FindSubCluster(
+  seurat,
+  cluster = "2",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster_2",
+  resolution = 0.4
+)
+seurat$final_clusters <- seurat$subcluster_2
+Idents(seurat) <- "final_clusters"
+DimPlot(seurat)
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat, path_to_save)
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
+
