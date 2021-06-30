@@ -116,14 +116,53 @@ DimPlot(seurat, group.by = "tissue")
 ```
 
 
+In addition, we have seen a cluster of erythroblasts (HBM+) that cluster with the CD79A+ cells, most likely due to its strong proliferative signature. We will fetch them with the `FindSubCluster` function and rule them out from the analysis:
+
+```{r}
+# Subcluster
+seurat <- FindSubCluster(
+  seurat,
+  cluster = "3",
+  graph.name = "RNA_snn",
+  subcluster.name = "fetch_erythroblasts",
+  resolution = 0.2
+)
+DimPlot(seurat, group.by = "fetch_erythroblasts", cols = color_palette)
+Idents(seurat) <- "fetch_erythroblasts"
+
+
+# Find markers of potential erythroblasts
+markers_erythroblasts <- purrr::map(c("3_3", "3_4"), function(x) {
+  df <- FindMarkers(
+    seurat,
+    ident.1 = x,
+    only.pos = TRUE,
+    logfc.threshold = 0.75
+  )
+  df <- df %>%
+    rownames_to_column("gene") %>%
+    arrange(desc(avg_log2FC))
+  df
+})
+names(markers_erythroblasts) <- c("3_3", "3_4")
+DT::datatable(markers_erythroblasts$`3_3`)
+DT::datatable(markers_erythroblasts$`3_4`)
+
+
+# Subset
+mask <- colnames(seurat)[!(seurat$fetch_erythroblasts %in% c("3_3", "3_4"))]
+seurat <- subset(seurat, cells = mask)
+DimPlot(seurat, cols = color_palette)
+```
+
 
 # Separate CD5+ B cells from microenvironment
 
-As we can see, clusters 2 and 5 correspond to T cells, NK cells and monocytes. Cluster 3 contains mostly Richter-specific cells, so although it contains residual erythrocytes (HBM+) we will include it with the leukemic.
+As we can see, clusters 2 and 4 correspond to T cells, NK cells and monocytes.
 
 ```{r}
-microenv_clusters <- c("2", "5")
-leuk_clusters <- c("0", "1", "3", "4", "6")
+microenv_clusters <- c("2", "4")
+leuk_clusters <- c("0", "1", "3_0", "3_1", "3_2")
 microenv <- subset(seurat, idents = microenv_clusters)
 leuk <- subset(seurat, idents = leuk_clusters)
 DimPlot(leuk, cols = color_palette, pt.size = 0.3)
@@ -137,6 +176,7 @@ DimPlot(microenv, cols = color_palette, pt.size = 0.3)
 saveRDS(microenv, path_to_save_microenv)
 saveRDS(leuk, path_to_save_leukemic)
 ```
+
 
 # Sesion Information
 
