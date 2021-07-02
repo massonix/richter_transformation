@@ -133,7 +133,22 @@ DimPlot(seurat, group.by = "time_point")
 FeaturePlot(seurat, "CXCR4") +
   scale_color_viridis_c(option = "magma")
 ```
-Cluster 1 and 2 correspond to different time-points but to the same underlying subpopulation (CXCR4+ cells). Thus, we will consider it as a single cluster and rename the others:
+Cluster 1 and 2 correspond to different time-points but to the same underlying subpopulation (CXCR4+ cells). Thus, we will consider it as a single cluster and rename the others.
+
+Similarly, clusters 2 and 4 do not have distinctive markers (see that fold changes are very small):
+
+```{r}
+markers_rt <- FindMarkers(
+  seurat,
+  ident.1 = "2",
+  ident.2 = "4",
+  only.pos = FALSE
+)
+DT::datatable(arrange(markers_rt, desc(avg_log2FC)))
+```
+
+
+Rename clusters:
 
 ```{r}
 seurat$final_clusters <- as.character(seurat$seurat_clusters)
@@ -142,10 +157,10 @@ seurat$final_clusters <- factor(case_when(
   seurat$final_clusters == "1" ~ "1",
   seurat$final_clusters == "2" ~ "1",
   seurat$final_clusters == "3" ~ "2",
-  seurat$final_clusters == "4" ~ "3",
-  seurat$final_clusters == "5" ~ "4",
-  seurat$final_clusters == "6" ~ "5",
-  seurat$final_clusters == "7" ~ "6"
+  seurat$final_clusters == "4" ~ "2",
+  seurat$final_clusters == "5" ~ "3",
+  seurat$final_clusters == "6" ~ "4",
+  seurat$final_clusters == "7" ~ "5"
 ))
 Idents(seurat) <- "final_clusters"
 DimPlot(seurat, cols = color_palette)
