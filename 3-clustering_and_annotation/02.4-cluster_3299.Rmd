@@ -102,7 +102,7 @@ We see a subpopulation with characteristics of low-quality cells: high mitochond
 seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:20)
 seurat <- FindClusters(seurat, resolution = 0.75)
 DimPlot(seurat)
-selected_cells <- colnames(seurat)[!(seurat$seurat_clusters %in% c("8", "7"))]
+selected_cells <- colnames(seurat)[!(seurat$seurat_clusters %in% c("7", "8"))]
 seurat <- subset(seurat, cells = selected_cells)
 seurat <- process_seurat(seurat, dims = 1:20)
 DimPlot(seurat)
