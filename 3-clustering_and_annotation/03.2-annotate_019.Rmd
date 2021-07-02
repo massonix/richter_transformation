@@ -1,0 +1,263 @@
+---
+title: 'Annotate tumoral cells (case 19)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will annotate the cells of the patient with id "019".
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/5.seurat_clustered_19.rds")
+path_to_save <- here::here("results/R_objects/6.seurat_annotated_19.rds")
+path_to_save_markers <- here::here("3-clustering_and_annotation/markers_clusters_19.rds")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+min_log2FC <- 0.3
+alpha <- 0.001
+```
+
+  
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+seurat
+DimPlot(seurat, cols = color_palette)
+```
+
+
+# Cell Cycle Score
+
+As upregulation of cell cycle genes is a hallmark of Richter transformation, we will infer the cell cycle score and phase for each cell:
+
+```{r}
+seurat <- CellCycleScoring(
+  seurat,
+  s.features = cc.genes.updated.2019$s.genes,
+  g2m.features = cc.genes.updated.2019$g2m.genes,
+  set.ident = FALSE
+)
+DimPlot(seurat, group.by = "Phase")
+umap_s_score <- FeaturePlot(seurat, features = "S.Score") +
+  scale_color_viridis_c(option = "magma") +
+  labs(title = "S Score") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+umap_g2m_score <- FeaturePlot(seurat, features = "G2M.Score") +
+  scale_color_viridis_c(option = "magma") +
+  labs(title = "G2M Score") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+umap_cc_combined <- ggpubr::ggarrange(
+  plotlist = list(umap_s_score, umap_g2m_score),
+  nrow = 2,
+  ncol = 1,
+  common.legend = FALSE
+)
+umap_cc_combined
+```
+
+
+# Find Markers
+
+```{r}
+markers <- FindAllMarkers(seurat, only.pos = TRUE, logfc.threshold = min_log2FC)
+markers <- markers %>%
+  mutate(cluster = as.character(cluster)) %>%
+  filter(p_val_adj < alpha) %>%
+  arrange(cluster) %>%
+  group_by(cluster) %>%
+  arrange(desc(avg_log2FC), .by_group = TRUE)
+DT::datatable(markers)
+```
+
+
+# Annotation
+
+Important literature to annotate the cells:
+
+
+* [Intraclonal Complexity in Chronic Lymphocytic Leukemia:Fractions Enriched in Recently Born/Divided andOlder/Quiescent Cells](https://molmed.biomedcentral.com/articles/10.2119/molmed.2011.00360).
+* [MicroRNA-155influences B-cell receptor signaling and associateswith aggressive disease in chronic lymphocytic leukemia](https://ashpublications.org/blood/article/124/4/546/33343/MicroRNA-155-influences-B-cell-receptor-signaling).
+
+
+| Cluster | Markers                   | Annotation                 |
+|---------|---------------------------|----------------------------|
+| 0       | CD27                      | CXCR4loCD27hi              |
+| 1       | CXCR4                     | CXCR4hiCD27lo              |
+| 2       | TP53INP1, CCR7, PIK3IP1   | TP53INP1hi RT-like         |
+| 3       | MIR155HG, MS4A1           | MIR155HGhi RT-like         |
+| 4       | MIR155HG, MS4A1, ENO1     | MIR155HGhi CLL-like        |
+| 5       | TOP2A, PCNA               | RT-like proliferative      |
+
+
+```{r}
+seurat$annotation_final <- factor(
+  seurat$final_clusters,
+  levels = c("0", "1", "2", "3", "4", "5"),
+)
+new_levels_19 <- c("CXCR4loCD27hi", "CXCR4hiCD27lo", "TP53INP1hi RT-like",
+                   "MIR155HGhi RT-like", "MIR155HGhi CLL-like",
+                   "RT-like proliferative")
+levels(seurat$annotation_final) <- new_levels_19
+reordered_levels_19 <- c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi CLL-like",
+                         "MIR155HGhi RT-like", "TP53INP1hi RT-like",
+                         "RT-like proliferative")
+seurat$annotation_final <- factor(seurat$annotation_final, reordered_levels_19)
+Idents(seurat) <- "annotation_final"
+
+
+# Plot UMAP
+cols <- c("gray79", "#9d9fa1", "gray30", "#f6c7c4", "#c88495", "#6d203f",
+          "mediumorchid3")
+names(cols) <- levels(seurat$annotation_final)
+umap_annotation <- DimPlot(seurat, pt.size = 0.5)
+col_labels <- c(
+  "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
+  "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
+  "MIR155HGhi" = bquote(MIR155HG^hi),
+  "CCND2lo RT-like" = bquote(CCND2^lo~"RT-like"),
+  "CCND2hi RT-like" = bquote(CCND2^hi~"RT-like"),
+  "RT-like proliferative" = bquote("RT-like proliferative"),
+  "MZB1hiIGHMhiXBP1hi" = bquote(MZB1^hi~IGHM^hi~XBP1^hi)
+)
+umap_annotation <- umap_annotation +
+  scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+umap_annotation
+```
+
+
+# Visualize markers
+
+```{r}
+# UMAPs
+genes_interest <- c("CXCR4", "CD24", "CD27", "MIR155HG", "CCND2", "TOP2A",
+                    "PCNA", "MZB1", "IGHM", "XBP1")
+feature_plots <- purrr::map(genes_interest, function(x) {
+  p <- FeaturePlot(seurat, x, pt.size = 0.5) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+
+
+# Dot plots
+dot_plot <- DotPlot(seurat, features = rev(genes_interest)) +
+  coord_flip() +
+  scale_color_viridis_c(option = "magma") +
+  scale_y_discrete(breaks = names(col_labels), labels = col_labels) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+    legend.title = element_text(size = 12)
+  )
+dot_plot
+
+
+# Violin plots
+vln_plot_s <- seurat@meta.data %>%
+  ggplot(aes(annotation_final, S.Score)) +
+    geom_violin(fill = "gray") +
+    labs(x = "", y = "S Phase Score") +
+    scale_x_discrete(breaks = names(col_labels), labels = col_labels) +
+    theme_bw() +
+    theme(axis.text.x = element_text(color = "black", angle = 45, vjust = 1, hjust = 1, size = 11))
+vln_plot_s
+vln_plot_g2m <- seurat@meta.data %>%
+  ggplot(aes(annotation_final, G2M.Score)) +
+    geom_violin(fill = "gray") +
+    labs(x = "", y = "G2M Phase Score") +
+    scale_x_discrete(breaks = names(col_labels), labels = col_labels) +
+    theme_bw() +
+    theme(axis.text.x = element_text(color = "black", angle = 45, vjust = 1, hjust = 1, size = 11))
+vln_plot_g2m
+```
+
+
+# Save
+
+```{r}
+# Save Seurat object
+saveRDS(seurat, path_to_save)
+
+
+# Save markers
+markers$annotation <- factor(markers$cluster)
+levels(markers$annotation) <- new_levels_19
+markers_list <- purrr::map(levels(markers$annotation), function(x) {
+  df <- markers[markers$annotation == x, ]
+  df <- df[, c(7, 1, 5, 2:4, 6, 8)]
+  df
+})
+names(markers_list) <- levels(markers$annotation)
+markers_list <- markers_list[reordered_levels_19]
+saveRDS(markers_list, path_to_save_markers)
+openxlsx::write.xlsx(
+  x = markers_list,
+  file = "results/tables/markers/markers_annotated_clusters_patient_19.xlsx"
+)
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
