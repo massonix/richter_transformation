@@ -99,6 +99,42 @@ seurat <- subset(seurat, seurat_clusters != "2")
 seurat <- process_seurat(seurat, dims = 1:20)
 DimPlot(seurat)
 DimPlot(seurat, group.by = "time_point")
+FeaturePlot(seurat, features = "NKG7")
+```
+
+Despite our efforts, we still have some cells from the microenvironment:
+
+```{r}
+# microenv_barcodes <- CellSelector(FeaturePlot(seurat, features = "NKG7"))
+microenv_barcodes <- c(
+  "s6dm1ahu_e8w2ucdi_AAGTGAACAGGTCCGT-1",
+  "s6dm1ahu_e8w2ucdi_CGGGACTCACCTTCGT-1",
+  "s6dm1ahu_e8w2ucdi_GAAGGGTGTAGTGATA-1",
+  "s6dm1ahu_e8w2ucdi_GATCCCTAGGTCCCGT-1",
+  "s6dm1ahu_e8w2ucdi_TACAACGGTCCTGAAT-1",
+  "s6dm1ahu_e8w2ucdi_TACCCGTAGTAGTCAA-1"
+)
+seurat$is_microenv <- ifelse(
+  colnames(seurat) %in% microenv_barcodes,
+  TRUE,
+  FALSE
+)
+Idents(seurat) <- "is_microenv"
+markers_microenv <- FindMarkers(
+  seurat,
+  ident.1 = TRUE,
+  ident.2 = FALSE,
+  only.pos = TRUE,
+  logfc.threshold = 0.75
+)
+DT::datatable(markers_microenv)
+```
+
+
+Filter out:
+
+```{r}
+seurat <- subset(seurat, is_microenv == FALSE)
 ```
 
 
@@ -106,24 +142,50 @@ DimPlot(seurat, group.by = "time_point")
 
 ```{r}
 seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:20)
-seurat <- FindClusters(seurat, resolution = 0.65)
+seurat <- FindClusters(seurat, resolution = 0.1)
 DimPlot(seurat)
+
+
+# Find subclusters Richter
+seurat <- FindSubCluster(
+  seurat,
+  cluster = "1",
+  subcluster.name = "richter_subclusters",
+  graph.name = "RNA_snn",
+  resolution = 0.3
+)
+DimPlot(seurat, group.by = "richter_subclusters")
+
+
+# Find subclusters CLL
+Idents(seurat) <- "richter_subclusters"
+seurat <- FindSubCluster(
+  seurat,
+  cluster = "0",
+  subcluster.name = "cll_subclusters",
+  graph.name = "RNA_snn",
+  resolution = 0.2
+)
+DimPlot(seurat, group.by = "cll_subclusters")
+Idents(seurat) <- "cll_subclusters"
+markers_0 <- FindMarkers(
+  seurat,
+  ident.1 = "0_1",
+  ident.2 = "0_0",
+  only.pos = FALSE
+)
+markers_0 <- markers_0 %>%
+  rownames_to_column("gene") %>%
+  arrange(desc(avg_log2FC))
+DT::datatable(markers_0)
 ```
 
 
-Notably, we observe how we can stratify cluster 4 based on MIR155HG and ENO1 expression:
+Importantly we see that in the CLL cluster the clusters are not very robust, since the fold-changes are very small. Thus, we will consider it as a single cluster:
+
 
 ```{r}
-FeaturePlot(seurat, "MIR155HG") + scale_color_viridis_c(option = "magma")
-FeaturePlot(seurat, "ENO1") + scale_color_viridis_c(option = "magma")
-seurat <- FindSubCluster(
-  seurat,
-  cluster = "4",
-  graph.name = "RNA_snn",
-  subcluster.name = "CCND2_subclusters",
-  resolution = 0.2
-)
-seurat$final_clusters <- seurat$CCND2_subclusters
+seurat$final_clusters <- seurat$richter_subclusters
 Idents(seurat) <- "final_clusters"
 DimPlot(seurat)
 ```
