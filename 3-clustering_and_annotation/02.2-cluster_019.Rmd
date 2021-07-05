@@ -133,6 +133,8 @@ DimPlot(seurat, group.by = "time_point")
 FeaturePlot(seurat, "CXCR4") +
   scale_color_viridis_c(option = "magma")
 ```
+
+
 Cluster 1 and 2 correspond to different time-points but to the same underlying subpopulation (CXCR4+ cells). Thus, we will consider it as a single cluster and rename the others.
 
 Similarly, clusters 2 and 4 do not have distinctive markers (see that fold changes are very small):

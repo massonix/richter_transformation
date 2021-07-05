@@ -131,16 +131,17 @@ Important literature to annotate the cells:
 
 * [Intraclonal Complexity in Chronic Lymphocytic Leukemia:Fractions Enriched in Recently Born/Divided andOlder/Quiescent Cells](https://molmed.biomedcentral.com/articles/10.2119/molmed.2011.00360).
 * [MicroRNA-155influences B-cell receptor signaling and associateswith aggressive disease in chronic lymphocytic leukemia](https://ashpublications.org/blood/article/124/4/546/33343/MicroRNA-155-influences-B-cell-receptor-signaling).
+* [Of Lymph Nodes and CLL Cells: Deciphering the Role of CCR7 in the Pathogenesis of CLL and Understanding Its Potential as Therapeutic Target](https://www.frontiersin.org/articles/10.3389/fimmu.2021.662866/full)
 
 
-| Cluster | Markers                   | Annotation                 |
-|---------|---------------------------|----------------------------|
-| 0       | CD27                      | CXCR4loCD27hi              |
-| 1       | CXCR4                     | CXCR4hiCD27lo              |
-| 2       | TP53INP1, CCR7, PIK3IP1   | TP53INP1hi RT-like         |
-| 3       | MIR155HG, MS4A1           | MIR155HGhi RT-like         |
-| 4       | MIR155HG, MS4A1, ENO1     | MIR155HGhi CLL-like        |
-| 5       | TOP2A, PCNA               | RT-like proliferative      |
+| Cluster | Markers                             | Annotation                 |
+|---------|-------------------------------------|----------------------------|
+| 0       | CD27                                | CXCR4loCD27hi              |
+| 1       | CXCR4                               | CXCR4hiCD27lo              |
+| 2       | TP53INP1, CCR7, PIK3IP1, GLO1       | TP53INP1hi RT-like         |
+| 3       | MIR155HG, MS4A1, CCR7, TCL1A, GLO1  | MIR155HGhi RT-like         |
+| 4       | MIR155HG, MS4A1, ENO1               | MIR155HGhi CLL-like        |
+| 5       | TOP2A, PCNA                         | RT-like proliferative      |
 
 
 ```{r}
@@ -160,18 +161,16 @@ Idents(seurat) <- "annotation_final"
 
 
 # Plot UMAP
-cols <- c("gray79", "#9d9fa1", "gray30", "#f6c7c4", "#c88495", "#6d203f",
-          "mediumorchid3")
+cols <- c("gray79", "#9d9fa1", "gray30", "#f6c7c4", "#c88495", "#6d203f")
 names(cols) <- levels(seurat$annotation_final)
 umap_annotation <- DimPlot(seurat, pt.size = 0.5)
 col_labels <- c(
   "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
   "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
-  "MIR155HGhi" = bquote(MIR155HG^hi),
-  "CCND2lo RT-like" = bquote(CCND2^lo~"RT-like"),
-  "CCND2hi RT-like" = bquote(CCND2^hi~"RT-like"),
-  "RT-like proliferative" = bquote("RT-like proliferative"),
-  "MZB1hiIGHMhiXBP1hi" = bquote(MZB1^hi~IGHM^hi~XBP1^hi)
+  "MIR155HGhi CLL-like" = bquote(MIR155HG^hi~"CLL-like"),
+  "MIR155HGhi RT-like" = bquote(MIR155HG^hi~"RT-like"),
+  "TP53INP1hi RT-like" = bquote(TP53INP1^hi~"RT-like"),
+  "RT-like proliferative" = bquote("RT-like proliferative")
 )
 umap_annotation <- umap_annotation +
   scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
@@ -189,13 +188,14 @@ umap_annotation
 
 ```{r}
 # UMAPs
-genes_interest <- c("CXCR4", "CD24", "CD27", "MIR155HG", "CCND2", "TOP2A",
-                    "PCNA", "MZB1", "IGHM", "XBP1")
+genes_interest <- c("CXCR4", "CD27", "S100A4", "MIR155HG", "MS4A1", "ENO1",
+                    "CCR7", "TCL1A", "TP53INP1", "PIK3IP1", "TOP2A", "PCNA")
 feature_plots <- purrr::map(genes_interest, function(x) {
   p <- FeaturePlot(seurat, x, pt.size = 0.5) +
     scale_color_viridis_c(option = "magma")
   p
 })
+feature_plots
 
 
 # Dot plots

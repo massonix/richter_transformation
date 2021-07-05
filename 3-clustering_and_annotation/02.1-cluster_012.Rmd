@@ -122,6 +122,74 @@ seurat <- FindSubCluster(
   subcluster.name = "CCND2_subclusters",
   resolution = 0.2
 )
+DimPlot(seurat, group.by = "CCND2_subclusters")
+```
+
+
+Finally, in later stages of the project we noticed that we had lingering doublets with cells from the microenvironment (T cells, NK cells or monocytes):
+
+```{r}
+microenv_markers <- c("CD3D", "NKG7", "LYZ")
+feat_plots_microenv <- purrr::map(microenv_markers, function(x) {
+  p <- FeaturePlot(seurat, x) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+feat_plots_microenv
+```
+
+In addition, we see that these cells have a high scrublet score (calculated with Scrublet):
+
+```{r}
+FeaturePlot(seurat, "scrublet_doublet_scores") + scale_color_viridis_c(option = "magma")
+```
+
+
+Thus, let us use the function `CellSelector` to fetch those doublets and exclude them:
+
+```{r}
+# doublets <- CellSelector(DimPlot(seurat))
+doublets <- c(
+  "bco1we6n_qaz6s7wd_ACCTACCCAAGCACCC-1",
+  "bco1we6n_qaz6s7wd_ATGAAAGTCTACGGTA-1",
+  "bco1we6n_qaz6s7wd_CTGTAGAAGACCTTTG-1",
+  "bco1we6n_qaz6s7wd_GTGATGTAGCTTCTAG-1",
+  "bco1we6n_qaz6s7wd_TCCTCCCAGTAGGTTA-1",
+  "r65huxjg_g0itbe2k_AAATGGAAGAAGGTAG-1",
+  "r65huxjg_g0itbe2k_ATTGGGTTCGTCGGGT-1",
+  "r65huxjg_g0itbe2k_GAAGCGACAGGCTTGC-1",
+  "r65huxjg_g0itbe2k_GCCATTCGTTCTTGCC-1",
+  "r65huxjg_g0itbe2k_GGTTGTAAGAGTCAGC-1",
+  "r65huxjg_g0itbe2k_TGCGATATCCCATAGA-1"
+)
+seurat$is_doublet <- ifelse(colnames(seurat) %in% doublets, TRUE, FALSE)
+Idents(seurat) <- "is_doublet"
+DimPlot(seurat)
+```
+
+
+Let us find the markers of those doublets:
+
+```{r}
+markers_doublets <- FindMarkers(
+  seurat,
+  ident.1 = TRUE,
+  only.pos = TRUE,
+  logfc.threshold = 0.5
+)
+DT::datatable(markers_doublets)
+```
+
+As we can see, they clearly express markers of T cells or NK cells. Hence, we will exclude them:
+
+```{r}
+seurat <- subset(seurat, is_doublet == FALSE)
+```
+
+
+Final clustering:
+
+```{r}
 seurat$final_clusters <- seurat$CCND2_subclusters
 Idents(seurat) <- "final_clusters"
 DimPlot(seurat)

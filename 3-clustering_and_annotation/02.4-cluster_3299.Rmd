@@ -129,7 +129,47 @@ seurat <- FindSubCluster(
   subcluster.name = "subcluster_2",
   resolution = 0.4
 )
-seurat$final_clusters <- seurat$subcluster_2
+DimPlot(seurat, group.by = "subcluster_2")
+FeaturePlot(seurat, c("CD27", "S100A4", "HBD"))
+```
+
+
+Despite our efforts, we see that we still have some lingering erythroblasts (HBD+). Let us remove them:
+
+```{r}
+seurat <- subset(seurat, subcluster_2 != "3")
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat, group.by = "subcluster_2")
+```
+
+Finally, in later stages of the project we noticed that we had lingering doublets with cells from the microenvironment (T cells, NK cells or monocytes):
+
+```{r}
+FeaturePlot(seurat, c("CD3D", "NKG7", "LYZ"))
+```
+
+```{r}
+seurat2 <- seurat
+seurat2 <- FindNeighbors(seurat2, k.param = 5, reduction = "pca", dims = 1:20)
+seurat2 <- FindClusters(seurat2, resolution = 0.2)
+DimPlot(seurat2)
+selected_cells <- colnames(seurat2)[seurat2$seurat_clusters != "3"]
+seurat <- subset(seurat, cells = selected_cells)
+DimPlot(seurat, group.by = "subcluster_2")
+```
+
+
+Finally, we observe that, despite some differences, clusters 2_0 and 2_1 both express CD27 and S100A4. To keep the consistency with previous annotations, we will group them into a single cluster:
+
+```{r}
+seurat$final_clusters <- factor(case_when(
+  seurat$subcluster_2 == "0" ~ "0",
+  seurat$subcluster_2 == "1" ~ "1",
+  seurat$subcluster_2 == "2_0" ~ "2",
+  seurat$subcluster_2 == "2_1" ~ "2",
+  seurat$subcluster_2 == "2_2" ~ "3",
+  seurat$subcluster_2 == "2_3" ~ "4", 
+))
 Idents(seurat) <- "final_clusters"
 DimPlot(seurat)
 ```

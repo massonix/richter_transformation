@@ -197,6 +197,7 @@ feature_plots <- purrr::map(genes_interest, function(x) {
     scale_color_viridis_c(option = "magma")
   p
 })
+feature_plots
 
 
 # Dot plots
