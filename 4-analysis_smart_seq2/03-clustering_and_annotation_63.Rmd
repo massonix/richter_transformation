@@ -37,11 +37,18 @@ library(tidyverse)
 ```{r}
 # Paths
 path_to_obj <- here::here("results/R_objects/patient_63/2.seurat_object_filtered.rds")
-path_to_save <- here::here("results/R_objects/patient_63/3.seurat_LN_annotated.rds")
+path_to_save <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_save_markers <- here::here("3-clustering_and_annotation/tmp/markers_clusters_63.rds")
 
 
 # Functions
 source(here::here("bin/utils.R"))
+
+
+# Params
+k_param <- 10
+min_log2FC <- 0.3
+alpha <- 0.001
 ```
 
 
@@ -97,81 +104,87 @@ umap_tissue <- DimPlot(seurat, group.by = "tissue")
 umap_time_point + umap_tissue
 ```
 
-## Tissue-specific analysis 
+# Cell Cycle Score
 
-As we can see, the tissue of origin (peripheral blood or lymph node) is a major source of heterogeneity. Thus, we will repeat the process splitting the Seurat object by tissue:
+As upregulation of cell cycle genes is a hallmark of Richter transformation, we will infer the cell cycle score and phase for each cell:
 
 ```{r}
-seurat_list <- SplitObject(seurat, split.by = "tissue")
-seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
-  seurat_obj <- seurat_obj %>%
-    FindVariableFeatures() %>%
-    ScaleData() %>%
-    RunPCA() %>%
-    RunUMAP(n.neighbors = 15, reduction = "pca", dims = 1:20)
-  seurat_obj
-})
-umap_ln_time_point <- DimPlot(seurat_list$LN, group.by = "time_point")
-umap_pb_time_point <- DimPlot(seurat_list$PB, group.by = "time_point")
-umap_pb_time_point + umap_ln_time_point
+seurat <- CellCycleScoring(
+  seurat,
+  s.features = cc.genes.updated.2019$s.genes,
+  g2m.features = cc.genes.updated.2019$g2m.genes,
+  set.ident = FALSE
+)
+DimPlot(seurat, group.by = "Phase")
+umap_s_score <- FeaturePlot(seurat, features = "S.Score") +
+  scale_color_viridis_c(option = "magma") +
+  labs(title = "S Score") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+umap_g2m_score <- FeaturePlot(seurat, features = "G2M.Score") +
+  scale_color_viridis_c(option = "magma") +
+  labs(title = "G2M Score") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+umap_cc_combined <- ggpubr::ggarrange(
+  plotlist = list(umap_s_score, umap_g2m_score),
+  nrow = 2,
+  ncol = 1,
+  common.legend = FALSE
+)
+umap_cc_combined
 ```
 
 
 # Cluster
 
 ```{r}
-seurat_list <- purrr::map(
-  seurat_list,
-  FindNeighbors,
+seurat <- FindNeighbors(
+  seurat,
+  k.param = k_param,
   dims = 1:20,
-  reduction = "pca",
-  k.param = 15
+  reduction = "pca"
 )
-
-
-seurat_list$LN <- FindClusters(seurat_list$LN, resolution = 0.4)
-seurat_list$PB <- FindClusters(seurat_list$PB, resolution = 0.75)
-DimPlot(seurat_list$LN) + DimPlot(seurat_list$PB)
-DimPlot(seurat_list$LN) + DimPlot(seurat_list$LN, group.by = "sample_description_FN")
+seurat <- FindClusters(seurat, resolution = 0.2)
+DimPlot(seurat)
 ```
 
-Clearly, the cells from peripheral blood are very homogeneous, so we can hardly find any structure in the data. On the other hand, the cells from lymph node clearly divide into Richter and CLL.
+Let us subcluster to find the subpopulation of cycling cells
 
+```{r}
+seurat <- FindSubCluster(
+  seurat,
+  cluster = "1",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster_proliferative",
+  resolution = 0.3
+)
+DimPlot(seurat, group.by = "subcluster_proliferative")
+```
 
 # Markers
 
 ```{r}
-markers_all <- FindAllMarkers(
-  seurat_list$LN,
-  only.pos = TRUE,
-  logfc.threshold = 0.75
-)
-DT::datatable(markers_all)
-```
-```{r}
-p1 <- FeaturePlot(seurat_list$LN, "IGHM") +
-  scale_color_viridis_c(option = "magma")
-p2 <- FeaturePlot(seurat_list$LN, "IGHG1") +
-  scale_color_viridis_c(option = "magma")
-p1 + p2
-```
-
-
-Curious observation: IGHM and IGHG1 have mutually exclusive expression patterns.
-
-
-# Cell cycle scoring
-
-```{r}
-seurat_list$LN <- CellCycleScoring(
-  seurat_list$LN,
-  s.features = cc.genes.updated.2019$s.genes,
-  g2m.features = cc.genes.updated.2019$g2m.genes
-)
-FeaturePlot(seurat_list$LN, features = "S.Score") +
-  scale_color_viridis_c(option = "magma")
-FeaturePlot(seurat_list$LN, features = "G2M.Score") +
-  scale_color_viridis_c(option = "magma")
+seurat$final_clusters <- seurat$subcluster_proliferative
+Idents(seurat) <- "final_clusters"
+markers <- FindAllMarkers(seurat, only.pos = TRUE, logfc.threshold = min_log2FC)
+markers <- markers %>%
+  mutate(cluster = as.character(cluster)) %>%
+  dplyr::filter(p_val_adj < alpha) %>%
+  arrange(cluster) %>%
+  group_by(cluster) %>%
+  arrange(desc(avg_log2FC), .by_group = TRUE)
+DT::datatable(markers)
 ```
 
 
@@ -179,35 +192,112 @@ FeaturePlot(seurat_list$LN, features = "G2M.Score") +
 
 | Cluster | Markers                   | Annotation                 |
 |---------|---------------------------|----------------------------|
-| 0       | CXCR4                     | CXCR4+ CLL-like            |
-| 1       | IGHG1, IGHG4              | Richter-like               |
+| 0       | CXCR4                     | CLL-like                   |
+| 1_0     | TCL1A, BTK, WNT3          | RT-like quiescent          |
+| 1_1     | TOP2A, PCNA               | RT-like proliferative      |
 
 
 ```{r}
-seurat_list$LN$annotation <- seurat_list$LN$seurat_clusters
-levels(seurat_list$LN$annotation) <- c("CXCR4+ CLL-like", "Richter-like")
-Idents(seurat_list$LN) <- "annotation"
-DimPlot(seurat_list$LN)
+seurat$annotation_final <- factor(
+  seurat$final_clusters,
+  levels = c("0", "1_0", "1_1"),
+)
+new_levels_63 <- c("CLL-like", "RT-like quiescent", "RT-like proliferative")
+levels(seurat$annotation_final) <- new_levels_63
+reordered_levels_63 <- new_levels_63
+seurat$annotation_final <- factor(seurat$annotation_final, reordered_levels_63)
+Idents(seurat) <- "annotation_final"
+
+
+# Plot UMAP
+cols <- c("gray79", "#f6c7c4", "#6d203f")
+names(cols) <- levels(seurat$annotation_final)
+umap_annotation <- DimPlot(seurat, pt.size = 1)
+col_labels <- c(
+  "CLL-like" = bquote("CLL-like"),
+  "RT-like quiescent" = bquote("RT-like quiescent"),
+  "RT-like proliferative" = bquote("RT-like proliferative")
+)
+umap_annotation <- umap_annotation +
+  scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+umap_annotation
+```
+
+
+# Visualize markers
+
+```{r}
+# UMAPs
+genes_interest <- c("CXCR4", "TCL1A", "BTK", "WNT3", "TOP2A", "PCNA")
+feature_plots <- purrr::map(genes_interest, function(x) {
+  p <- FeaturePlot(seurat, x, pt.size = 1) +
+    scale_color_viridis_c(option = "magma")
+  p
+})
+feature_plots
+
+
+# Dot plots
+dot_plot <- DotPlot(seurat, features = rev(genes_interest)) +
+  coord_flip() +
+  scale_color_viridis_c(option = "magma") +
+  scale_y_discrete(breaks = names(col_labels), labels = col_labels) +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+    legend.title = element_text(size = 12)
+  )
+dot_plot
+
+
+# Violin plots
+vln_plot_s <- seurat@meta.data %>%
+  ggplot(aes(annotation_final, S.Score)) +
+    geom_violin(fill = "gray") +
+    labs(x = "", y = "S Phase Score") +
+    scale_x_discrete(breaks = names(col_labels), labels = col_labels) +
+    theme_bw() +
+    theme(axis.text.x = element_text(color = "black", angle = 45, vjust = 1, hjust = 1, size = 11))
+vln_plot_s
+vln_plot_g2m <- seurat@meta.data %>%
+  ggplot(aes(annotation_final, G2M.Score)) +
+    geom_violin(fill = "gray") +
+    labs(x = "", y = "G2M Phase Score") +
+    scale_x_discrete(breaks = names(col_labels), labels = col_labels) +
+    theme_bw() +
+    theme(axis.text.x = element_text(color = "black", angle = 45, vjust = 1, hjust = 1, size = 11))
+vln_plot_g2m
 ```
 
 
 # Save
 
 ```{r}
-saveRDS(seurat_list$LN, path_to_save)
+# Save Seurat object
+saveRDS(seurat, path_to_save)
 
 
 # Save markers
-clusters <- unique(markers_all$cluster)
-markers_dfs <- purrr::map(clusters, function(x) {
-  df <- markers_all[markers_all$cluster == x, ]
-  df <- df[, c(7, 1:6)]
-  df <- arrange(df, desc(avg_log2FC))
+markers$annotation <- factor(markers$cluster)
+levels(markers$annotation) <- new_levels_63
+markers_list <- purrr::map(levels(markers$annotation), function(x) {
+  df <- markers[markers$annotation == x, ]
+  df <- df[, c(7, 1, 5, 2:4, 6, 8)]
   df
 })
-names(markers_dfs) <- clusters
-path_to_save_dfs <- here::here("results/tables/markers/markers_clusters_patient_63.xlsx")
-openxlsx::write.xlsx(markers_dfs, file = path_to_save_dfs)
+names(markers_list) <- levels(markers$annotation)
+markers_list <- markers_list[reordered_levels_63]
+saveRDS(markers_list, path_to_save_markers)
+openxlsx::write.xlsx(
+  x = markers_list,
+  file = here::here("results/tables/markers/markers_annotated_clusters_patient_63.xlsx")
+)
 ```
 
 
