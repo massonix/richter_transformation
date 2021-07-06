@@ -94,6 +94,7 @@ plate_distrs
 
 First, we want to see how the main QC variables distribute across samples. This will help us interpret the results downstream, as we will know which are the samples with lower quality.
 
+
 ## Library complexity
 
 ```{r}
