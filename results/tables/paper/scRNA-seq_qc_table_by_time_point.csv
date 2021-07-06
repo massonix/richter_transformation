@@ -1,0 +1,20 @@
+Case;Time point;Description;Subproject;Tissue;Method;Is hashed;Num of cells passing filters;Mean library size (total UMI or counts);Mean num of detected genes;Mean mitochondrial expression (%)
+12;T1;pretreatment;BCLLATLAS_10;PB;Chromium v3;TRUE;245;3249.6;1195.31;7.719
+12;T2;pretreatment_progression;BCLLATLAS_10;PB;Chromium v3;TRUE;65;3909.046;1358.292;7.938
+12;T4;posttreatment_2;BCLLATLAS_10;PB;Chromium v3;TRUE;1626;3928.748;1437.356;6.373
+12;T5;posttreatment_3;BCLLATLAS_10;PB;Chromium v3;TRUE;2529;3914.363;1408.348;6.48
+12;T6;RS;BCLLATLAS_10;PB;Chromium v3;TRUE;1320;13286.152;2934.776;8.667
+19;T1;pretreatment;BCLLATLAS_10;PB;Chromium v3;TRUE;330;4244.93;1436.409;12.643
+19;T3;posttreatment;BCLLATLAS_10;PB;Chromium v3;TRUE;2800;4823.43;1579.943;12.67
+19;T4;posttreatment_2;BCLLATLAS_10;PB;Chromium v3;TRUE;1368;5181.23;1593.448;12.931
+19;T5;posttreatment_3;BCLLATLAS_10;PB;Chromium v3;TRUE;955;5210.009;1671.666;13.491
+19;T6;RS;BCLLATLAS_10;PB;Chromium v3;TRUE;1831;4614.321;1581.88;12.029
+365;T2;posttreatment;BCLLATLAS_29;PB;Chromium v3;FALSE;4119;8190.818;2137.065;7.431
+365;T3;RS;BCLLATLAS_29;LN;Chromium v3;FALSE;566;19241.816;3717.707;9.957
+3299;T1;posttreatment;BCLLATLAS_10;BM;Chromium v3;TRUE;4246;3815.312;1356.374;8.645
+3299;T2;posttreatment_2;BCLLATLAS_10;BM;Chromium v3;TRUE;1176;3611.835;1142.49;8.526
+3299;T3;posttreatment_3;BCLLATLAS_10;BM;Chromium v3;TRUE;641;4298.039;1265.627;8.855
+63;T1;pretreatment;CLL_52;PB;Smart-seq2;FALSE;250;405400.376;960.484;5.444
+63;T1;pretreatmnt_2ndTissue;CLL_52;LN;Smart-seq2;FALSE;268;401663.713;1192.806;4.802
+63;T2;posttreatment;CLL_52;PB;Smart-seq2;FALSE;253;390705.66;1040.269;5.652
+63;T3;RS;CLL_52;LN;Smart-seq2;FALSE;212;411555.033;2406.547;8.44
