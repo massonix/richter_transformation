@@ -13,7 +13,6 @@ path_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
 path_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
 path_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
 path_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
-path_to_save <- here::here("")
 
 
 # Load Seurat objects
