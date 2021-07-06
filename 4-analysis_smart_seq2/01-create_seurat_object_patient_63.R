@@ -8,7 +8,7 @@ library(tidyverse)
 
 # Define paths
 path_to_obj <- here::here("data/CLL_52/CLL_52.dgecounts.rds")
-path_to_metadata <- here::here("data/CLL_52/CLL_52_metadata.csv")
+path_to_metadata <- here::here("data/CLL_52/CLL_52_experiment_metadata.csv")
 path_to_patient_metadata <- here::here("data/sample_metadata.csv")
 path_to_gene_names <- here::here("data/CLL_52/CLL_52.gene_names.txt")
 path_to_63 <- here::here("results/R_objects/patient_63")
@@ -27,7 +27,6 @@ gene_names_df <- gene_names_df[rownames(counts), ]
 if (all(rownames(counts) == rownames(gene_names_df))) {
   rownames(counts) <- gene_names_df$gene_name
 }
-all(rownames(counts) %in% gene_names_df$gene_id)
 metadata <- metadata[colnames(counts), ]
 patient_metadata <- read_csv(path_to_patient_metadata)
 patient_metadata <- patient_metadata[patient_metadata$donor_id == "63", ]
