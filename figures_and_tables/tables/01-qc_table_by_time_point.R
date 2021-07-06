@@ -47,7 +47,11 @@ qc_tables <- purrr::map(seurat_list, function(seurat_obj) {
   df
 })
 qc_table <- bind_rows(qc_tables, .id = "case")
-qc_table$is_hashed <- ifelse(qc_table$subproject == "BCLLATLAS_10", TRUE, FALSE)
+qc_table$is_hashed <- ifelse(
+  qc_table$subproject == "BCLLATLAS_10",
+  "TRUE",
+  "FALSE"
+)
 qc_table$method <- ifelse(
   qc_table$subproject == "CLL_52",
   "Smart-seq2",
