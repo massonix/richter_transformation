@@ -1,0 +1,209 @@
+---
+title: 'Patient-specific differential expression analysis (RT vs CLL)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The purpose of this notebook is to perform a patient-specific differential expression analysis (DEA) between the RT and CLL clusters. We will focus on the quiescent RT populations, since otherwise the proliferation signature will dominate the analysis.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(UpSetR)
+library(ggrepel)
+library(ggforce)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
+path_to_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
+path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
+path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
+path_to_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_save_rds <- here::here("6-differential_expression_analysis/tmp/patient_specific_differential_expression_analysis_rt_vs_cll.rds")
+path_to_save_xlsx <- here::here("results/tables/DEA/patient_specific_differential_expression_analysis_rt_vs_cll.xlsx")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+alpha <- 0.05
+min_avg_log2FC <- 0.25
+selected_avg_log2FC_l <- c(
+  "12" = 1.25,
+  "19" = 0.75,
+  "3299" = 0.75,
+  "365" = 1.5,
+  "63" = 1.25  
+)
+selected_avg_log2FC <- 1.25
+selected_pct_cells <- 10
+selected_significance_alpha <- alpha
+```
+
+
+## Load data
+
+```{r}
+paths_to_load <- c(
+  "12" = path_to_12,
+  "19" = path_to_19,
+  "3299" = path_to_3299,
+  "365" = path_to_365,
+  "63" = path_to_63
+)
+seurat_list <- purrr::map(paths_to_load, readRDS)
+seurat_list
+purrr::map(seurat_list, DimPlot, cols = color_palette)
+```
+
+
+# Differential expression analysis
+
+```{r}
+comparisons <- list(
+  "12" = list(
+    richter = c("CCND2lo RT-like", "CCND2hi RT-like"),
+    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi", "MZB1hiIGHMhiXBP1hi")
+  ),
+  "19" = list(
+    richter = c("MIR155HGhi RT-like", "TP53INP1hi RT-like"),
+    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi CLL-like")
+  ),
+  "3299" = list(
+    richter = "RT-like",
+    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "CD83loMIR155HGhi", "CD83hiMIR155HGhi")
+  ),
+  "365" = list(
+    richter = c("RT-like quiescent", "CXCR4loCD27hi", "MIR155HGhi"),
+    cll = c("CLL-like")
+  ),
+  "63" = list(
+    richter = "RT-like quiescent",
+    cll = "CLL-like"
+  )
+)
+dea <- purrr::map(names(comparisons), function(x) {
+  print(x)
+  seurat_obj <- seurat_list[[x]]
+  Idents(seurat_obj) <- "annotation_final"
+  df <- FindMarkers(
+    seurat_obj,
+    ident.1 = comparisons[[x]][["richter"]],
+    ident.2 = comparisons[[x]][["cll"]],
+    only.pos = FALSE,
+    logfc.threshold = 0
+  )
+  df <- df %>%
+    rownames_to_column("gene") %>%
+    arrange(desc(avg_log2FC))
+  df
+}) 
+names(dea) <- names(comparisons)
+dea <- purrr::map(names(dea), function(x) {
+  df <- dea[[x]]
+  df$direction <- case_when(
+    df$p_val_adj < alpha & df$avg_log2FC > min_avg_log2FC ~ "up",
+    df$p_val_adj < alpha & df$avg_log2FC < 0 & abs(df$avg_log2FC) > min_avg_log2FC ~ "down"
+  )
+  df$direction[is.na(df$direction)] <- "not sig."
+  pct_cells <- rowMeans(seurat_list[[x]][["RNA"]]@counts > 0) * 100
+  df$pct_cells_expressing <- pct_cells[df$gene]
+  df
+})
+names(dea) <- names(comparisons)
+upregulated_richter <- purrr::map(dea, function(df) df$gene[df$direction == "up"])
+downregulated_richter <- purrr::map(dea, function(df) df$gene[df$direction == "down"])
+print("DEA patient 12")
+DT::datatable(dea$`12`)
+print("DEA patient 19")
+DT::datatable(dea$`19`)
+print("DEA patient 3299")
+DT::datatable(dea$`3299`)
+print("DEA patient 365")
+DT::datatable(dea$`365`)
+print("DEA patient 63")
+DT::datatable(dea$`63`)
+```
+
+
+# Upset plots
+
+```{r}
+upset_upregulated <- upset(fromList(upregulated_richter), order.by = "freq")
+upset_downregulated <- upset(fromList(downregulated_richter), order.by = "freq")
+upset_upregulated
+upset_downregulated
+```
+
+
+# MA plots
+
+```{r fig.wide=TRUE}
+ma_plots <- purrr::map(names(dea), function(x) {
+  df <- dea[[x]]
+  selected_avg_log2FC <- selected_avg_log2FC_l[x]
+  p <- ma_plot(
+    df,
+    selected_avg_log2FC = selected_avg_log2FC,
+    selected_pct_cells = selected_pct_cells,
+    selected_significance_alpha = selected_significance_alpha
+  ) +
+    ggtitle(x) +
+    theme(plot.title = element_text(hjust = 0.5))
+  p
+})
+names(ma_plots) <- names(dea)
+ma_plots
+```
+
+
+# Save
+
+```{r}
+saveRDS(dea, path_to_save_rds)
+openxlsx::write.xlsx(dea, path_to_save_xlsx)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
+
