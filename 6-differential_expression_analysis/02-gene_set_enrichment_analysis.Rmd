@@ -1,0 +1,293 @@
+---
+title: 'Patient-specific gene set enrichment analysis (RT vs CLL)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will run a gene set enrichment analysis ([Gene set enrichment analysis](https://yulab-smu.top/clusterProfiler-book/chapter5.html#go-gene-set-enrichment-analysis)) 
+ with [clusterProfiler](https://yulab-smu.top/clusterProfiler-book/index.html) on the patient-specific lists of differentially expressed genes (DEG, RT vs CLL) ranked by descending average log2 fold-change.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(UpSetR)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(ggrepel)
+library(ggforce)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
+path_to_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
+path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
+path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
+path_to_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_deg <- here::here("6-differential_expression_analysis/tmp/patient_specific_differential_expression_analysis_rt_vs_cll.rds")
+path_to_save_rds <- here::here("6-differential_expression_analysis/tmp/patient_specific_gsea_rt_vs_cll.rds")
+path_to_save_xlsx <- here::here("results/tables/DEA/patient_specific_gsea_rt_vs_cll.xlsx")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+alpha <- 0.05
+GO_max_total_genes <- 250
+GO_min_enriched_genes <- 3
+GO_p_adj_threshold <- 0.01
+GO_min_odds_ratio <- 2.5
+max_gs_size <- 250
+min_gs_size <- 10
+simplify_cutoff <- 0.75
+```
+
+
+## Load data
+
+```{r}
+# Load Seurat objects
+paths_to_load <- c(
+  "12" = path_to_12,
+  "19" = path_to_19,
+  "3299" = path_to_3299,
+  "365" = path_to_365,
+  "63" = path_to_63
+)
+seurat_list <- purrr::map(paths_to_load, readRDS)
+seurat_list
+purrr::map(seurat_list, DimPlot, cols = color_palette)
+
+
+# Load DEG
+dea <- readRDS(path_to_deg)
+```
+
+
+# Patient-specific GSEA
+
+```{r}
+set.seed(1234)
+gsea_patient_specific <- purrr::map(dea, function(df) {
+  gene_list <- df$avg_log2FC
+  names(gene_list) <- df$gene
+  gsea_results <- gseGO(
+    gene_list,
+    ont = "BP",
+    OrgDb = org.Hs.eg.db,
+    keyType = "SYMBOL",
+    minGSSize = min_gs_size,
+    maxGSSize = max_gs_size,
+    seed = TRUE
+)
+gsea_results <- clusterProfiler::simplify(
+  gsea_results,
+  cutoff = simplify_cutoff
+)
+gsea_results
+})
+gsea_sorted <- purrr::map(gsea_patient_specific, function(x) {
+  df <- x@result %>%
+    dplyr::filter(p.adjust < alpha) %>%
+    dplyr::arrange(desc(NES))
+  df
+})
+DT::datatable(gsea_sorted$`12`)
+DT::datatable(gsea_sorted$`19`)
+DT::datatable(gsea_sorted$`3299`)
+DT::datatable(gsea_sorted$`365`)
+DT::datatable(gsea_sorted$`63`)
+
+
+# Plot
+dot_plots_gsea <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- clusterProfiler::dotplot(obj, showCategory = 40, color = "p.adjust")
+  p +
+    theme(axis.text.y = element_text(size = 9))
+})
+dot_plots_gsea
+```
+
+
+# Visualize intersections
+
+```{r}
+upregulated_terms <- purrr::map(gsea_sorted, function(df) {
+  x <- df$ID[df$NES > 0]
+  x
+})
+downregulated_terms <- purrr::map(gsea_sorted, function(df) {
+  x <- df$ID[df$NES < 0]
+  x
+})
+upset_upregulated <- upset(fromList(upregulated_terms), order.by = "freq")
+upset_downregulated <- upset(fromList(downregulated_terms), order.by = "freq")
+upset_upregulated
+upset_downregulated
+```
+
+
+
+```{r}
+oxphos_gg <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0006119",
+    by = "runningScore",
+    title = "oxidative phosphorylation"
+  )
+  p
+})
+mitochondrial_translation_gg <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0032543",
+    by = "runningScore",
+    title = "mitochondrial translation"
+  )
+  p
+})
+bcr_gg <- purrr::map(gsea_patient_specific, function(obj) {
+  p <- gseaplot(
+    obj,
+    geneSetID = "GO:0050853",
+    by = "runningScore",
+    title = "BCR signaling"
+  )
+  p
+})
+FeaturePlot(seurat_list$`12`, "WNT3") +
+  scale_color_viridis_c(option = "magma")
+FeaturePlot(seurat_list$`63`, "WNT3") +
+  scale_color_viridis_c(option = "magma")
+```
+
+
+
+
+# Calculate signatures relevant terms
+
+```{r}
+
+```
+
+
+# Is OXPHOS upregulation present in RT seed cells?
+
+```{r}
+Idents(seurat_list$`12`) <- "annotation_final"
+Idents(seurat_list$`63`) <- "annotation_final"
+richter_annotations <- c(
+  "CCND2hi Richter-like quiescent",
+  "CCND2lo Richter-like quiescent",
+  "Richter-like proliferative",
+  "Richter-like"
+)
+signatures_vars <- c("b_cell_signaling1", "oxphos2", "mitochondrial_translation3")
+signatures_titles <- c(
+  "BCR Signaling Score",
+  "OXPHOS Score",
+  "Mitochondrial Translation Score"
+)
+color_violin <- c("#dcdddc", "#cd8899")
+signatures_violin_p <- purrr::map(c("12", "63"), function(patient) {
+  seurat_obj <- seurat_list[[patient]]
+  seurat_obj$is_richter_like <- ifelse(
+    seurat_obj$annotation_final %in% richter_annotations,
+    "Richter-like",
+    "CLL-like"
+  )
+  ps <- purrr::map2(signatures_vars, signatures_titles, function(var, y_lab) {
+    p <- seurat_obj@meta.data %>%
+      mutate(sample_description2 = str_c(
+        time_point,
+        sample_description,
+        sep = "_"
+      ))  %>% 
+      ggplot(aes_string(
+        "sample_description2",
+        var,
+        fill = "is_richter_like",
+        color = "is_richter_like"
+      )) +
+        geom_violin(alpha = 0.35) +
+        geom_sina(size = 0.5, alpha = 1) +
+        scale_color_manual(values = color_violin) +
+        scale_fill_manual(values = color_violin) +
+        labs(title = x, x = "", y = y_lab, color = "", fill = "") +
+        theme_bw() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"),
+          plot.title = element_text(size = 12, hjust = 0.5)
+        )
+    p
+  })
+  out <- ggarrange(plotlist = ps, ncol = 3, common.legend = TRUE)
+  out
+})
+seurat_list$`12`$is_richter_like <- ifelse(
+  seurat_list$`12`$annotation_final %in% richter_annotations,
+  "Richter-like",
+  "CLL-like"
+)
+seurat_list$`12`@meta.data %>%
+  mutate(sample_description2 = str_c(
+    time_point,
+    sample_description_FN,
+    sep = "_"
+  ))  %>% 
+  ggplot(aes(sample_description2, oxphos2, fill = is_richter_like, color = is_richter_like)) +
+    geom_violin(alpha = 0.35) +
+    geom_sina(size = 0.5, alpha = 1) +
+    scale_color_manual(values = c("#dcdddc", "#cd8899")) +
+    scale_fill_manual(values = c("#dcdddc", "#cd8899")) +
+    labs(x = "", y = "OXPHOS score", color = "", fill = "") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"))
+```
+
+# Save
+
+```{r}
+saveRDS(gsea_sorted, path_to_save_rds)
+openxlsx::write.xlsx(gsea_sorted, path_to_save_xlsx)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
