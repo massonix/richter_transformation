@@ -110,12 +110,12 @@ gsea_patient_specific <- purrr::map(dea, function(df) {
     minGSSize = min_gs_size,
     maxGSSize = max_gs_size,
     seed = TRUE
-)
-gsea_results <- clusterProfiler::simplify(
-  gsea_results,
-  cutoff = simplify_cutoff
-)
-gsea_results
+  )
+  gsea_results <- clusterProfiler::simplify(
+    gsea_results,
+    cutoff = simplify_cutoff
+  )
+  gsea_results
 })
 gsea_sorted <- purrr::map(gsea_patient_specific, function(x) {
   df <- x@result %>%
@@ -132,7 +132,12 @@ DT::datatable(gsea_sorted$`63`)
 
 # Plot
 dot_plots_gsea <- purrr::map(gsea_patient_specific, function(obj) {
-  p <- clusterProfiler::dotplot(obj, showCategory = 40, color = "p.adjust")
+  p <- clusterProfiler::dotplot(
+    obj,
+    x = "NES",
+    showCategory = 40,
+    color = "p.adjust"
+  )
   p +
     theme(axis.text.y = element_text(size = 9))
 })
@@ -158,124 +163,177 @@ upset_downregulated
 ```
 
 
+# Calculate signatures relevant terms
+
+As we can see, patients 12, 63 and 365 share a great deal of enriched GO terms:
 
 ```{r}
-oxphos_gg <- purrr::map(gsea_patient_specific, function(obj) {
-  p <- gseaplot(
-    obj,
-    geneSetID = "GO:0006119",
-    by = "runningScore",
-    title = "oxidative phosphorylation"
-  )
-  p
-})
-mitochondrial_translation_gg <- purrr::map(gsea_patient_specific, function(obj) {
-  p <- gseaplot(
-    obj,
-    geneSetID = "GO:0032543",
-    by = "runningScore",
-    title = "mitochondrial translation"
-  )
-  p
-})
-bcr_gg <- purrr::map(gsea_patient_specific, function(obj) {
-  p <- gseaplot(
-    obj,
-    geneSetID = "GO:0050853",
-    by = "runningScore",
-    title = "BCR signaling"
-  )
-  p
-})
-FeaturePlot(seurat_list$`12`, "WNT3") +
-  scale_color_viridis_c(option = "magma")
-FeaturePlot(seurat_list$`63`, "WNT3") +
-  scale_color_viridis_c(option = "magma")
+go_terms <- list(
+  "12" = gsea_sorted$`12`$Description[gsea_sorted$`12`$NES > 0],
+  "365" = gsea_sorted$`365`$Description[gsea_sorted$`365`$NES > 0],
+  "63" = gsea_sorted$`63`$Description[gsea_sorted$`63`$NES > 0]
+)
+common_terms <- Reduce(intersect, go_terms)
+common_terms
 ```
 
 
-
-
-# Calculate signatures relevant terms
+Importantly, the majority of them are related with oxidative phosphorylation and mitochondrial gene expression and metabolism. Interestingly, the term with the lowest NES of patient 12 is BCR signaling. Thus, let us visualize those main terms and convert them to cell-specific scores with the `AddModuleScore` function:
 
 ```{r}
+selected_terms <- c("GO:0006119", "GO:0032543", "GO:0050853")
+selected_titles <- c("oxidative phosphorylation", "mitochondrial translation",
+                     "B cell receptor signaling pathway")
+gsea_plots <- purrr::map(gsea_patient_specific, function(obj) {
+  plots <- purrr::map2(selected_terms, selected_titles, function(x, title) {
+    p <- gseaplot(obj, geneSetID = x, by = "runningScore", title = title)
+    p
+  })
+  plots
+})
+gsea_plots
+```
 
+
+Calculate signatures:
+
+```{r}
+# Define and calculate
+gene_sets <- gsea_patient_specific$`12`@geneSets
+saveRDS(
+  gene_sets,
+  here::here("6-differential_expression_analysis/tmp/gene_sets_gsea_analysis.rds")
+)
+signatures <- list(
+  oxphos = gene_sets$`GO:0006119`,
+  mitochondrial_translation = gene_sets$`GO:0032543`,
+  bcr_signaling = gene_sets$`GO:0050853`
+)
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj <- AddModuleScore(
+    seurat_obj,
+    features = signatures,
+    name = names(signatures)
+  )
+  seurat_obj
+})
+
+
+# Plot
+umaps_oxphos <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, "oxphos1") +
+    scale_color_viridis_c(option = "magma") +
+    ggtitle("OXPHOS Score")
+  p
+})
+umaps_oxphos
+umaps_mt_translation <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, "mitochondrial_translation2") +
+    scale_color_viridis_c(option = "magma") +
+    ggtitle("MT Translation Score")
+  p
+})
+umaps_mt_translation
+umaps_bcr <- purrr::map(seurat_list, function(seurat_obj) {
+  p <- FeaturePlot(seurat_obj, "bcr_signaling3") +
+    scale_color_viridis_c(option = "magma") +
+    ggtitle("BCR Signaling Score")
+  p
+})
+umaps_bcr
+```
+
+
+Surprisingly, OXPHOS/MT translation seem to be largely exclusive with BCR signaling. In addition, it seems that the RT-like quiescent cluster of patient 63 could be further stratified by OXPHOS and ENO1 expression.
+
+```{r}
+FeaturePlot(
+  seurat_list$`63`,
+  c("oxphos1", "bcr_signaling3"),
+  blend = TRUE
+)
+FeaturePlot(
+  seurat_list$`63`,
+  c("oxphos1", "mitochondrial_translation2"),
+  blend = TRUE
+)
 ```
 
 
 # Is OXPHOS upregulation present in RT seed cells?
 
 ```{r}
-Idents(seurat_list$`12`) <- "annotation_final"
-Idents(seurat_list$`63`) <- "annotation_final"
-richter_annotations <- c(
-  "CCND2hi Richter-like quiescent",
-  "CCND2lo Richter-like quiescent",
-  "Richter-like proliferative",
-  "Richter-like"
-)
-signatures_vars <- c("b_cell_signaling1", "oxphos2", "mitochondrial_translation3")
-signatures_titles <- c(
-  "BCR Signaling Score",
-  "OXPHOS Score",
-  "Mitochondrial Translation Score"
-)
-color_violin <- c("#dcdddc", "#cd8899")
-signatures_violin_p <- purrr::map(c("12", "63"), function(patient) {
-  seurat_obj <- seurat_list[[patient]]
-  seurat_obj$is_richter_like <- ifelse(
-    seurat_obj$annotation_final %in% richter_annotations,
-    "Richter-like",
-    "CLL-like"
-  )
-  ps <- purrr::map2(signatures_vars, signatures_titles, function(var, y_lab) {
-    p <- seurat_obj@meta.data %>%
-      mutate(sample_description2 = str_c(
-        time_point,
-        sample_description,
-        sep = "_"
-      ))  %>% 
-      ggplot(aes_string(
-        "sample_description2",
-        var,
-        fill = "is_richter_like",
-        color = "is_richter_like"
-      )) +
-        geom_violin(alpha = 0.35) +
-        geom_sina(size = 0.5, alpha = 1) +
-        scale_color_manual(values = color_violin) +
-        scale_fill_manual(values = color_violin) +
-        labs(title = x, x = "", y = y_lab, color = "", fill = "") +
-        theme_bw() +
-        theme(
-          axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"),
-          plot.title = element_text(size = 12, hjust = 0.5)
-        )
-    p
-  })
-  out <- ggarrange(plotlist = ps, ncol = 3, common.legend = TRUE)
-  out
-})
-seurat_list$`12`$is_richter_like <- ifelse(
-  seurat_list$`12`$annotation_final %in% richter_annotations,
-  "Richter-like",
-  "CLL-like"
-)
-seurat_list$`12`@meta.data %>%
-  mutate(sample_description2 = str_c(
-    time_point,
-    sample_description_FN,
-    sep = "_"
-  ))  %>% 
-  ggplot(aes(sample_description2, oxphos2, fill = is_richter_like, color = is_richter_like)) +
-    geom_violin(alpha = 0.35) +
-    geom_sina(size = 0.5, alpha = 1) +
-    scale_color_manual(values = c("#dcdddc", "#cd8899")) +
-    scale_fill_manual(values = c("#dcdddc", "#cd8899")) +
-    labs(x = "", y = "OXPHOS score", color = "", fill = "") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"))
+# Idents(seurat_list$`12`) <- "annotation_final"
+# Idents(seurat_list$`63`) <- "annotation_final"
+# richter_annotations <- c(
+#   "CCND2hi Richter-like quiescent",
+#   "CCND2lo Richter-like quiescent",
+#   "Richter-like proliferative",
+#   "Richter-like"
+# )
+# signatures_vars <- c("b_cell_signaling1", "oxphos2", "mitochondrial_translation3")
+# signatures_titles <- c(
+#   "BCR Signaling Score",
+#   "OXPHOS Score",
+#   "Mitochondrial Translation Score"
+# )
+# color_violin <- c("#dcdddc", "#cd8899")
+# signatures_violin_p <- purrr::map(c("12", "63"), function(patient) {
+#   seurat_obj <- seurat_list[[patient]]
+#   seurat_obj$is_richter_like <- ifelse(
+#     seurat_obj$annotation_final %in% richter_annotations,
+#     "Richter-like",
+#     "CLL-like"
+#   )
+#   ps <- purrr::map2(signatures_vars, signatures_titles, function(var, y_lab) {
+#     p <- seurat_obj@meta.data %>%
+#       mutate(sample_description2 = str_c(
+#         time_point,
+#         sample_description,
+#         sep = "_"
+#       ))  %>% 
+#       ggplot(aes_string(
+#         "sample_description2",
+#         var,
+#         fill = "is_richter_like",
+#         color = "is_richter_like"
+#       )) +
+#         geom_violin(alpha = 0.35) +
+#         geom_sina(size = 0.5, alpha = 1) +
+#         scale_color_manual(values = color_violin) +
+#         scale_fill_manual(values = color_violin) +
+#         labs(title = x, x = "", y = y_lab, color = "", fill = "") +
+#         theme_bw() +
+#         theme(
+#           axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"),
+#           plot.title = element_text(size = 12, hjust = 0.5)
+#         )
+#     p
+#   })
+#   out <- ggarrange(plotlist = ps, ncol = 3, common.legend = TRUE)
+#   out
+# })
+# seurat_list$`12`$is_richter_like <- ifelse(
+#   seurat_list$`12`$annotation_final %in% richter_annotations,
+#   "Richter-like",
+#   "CLL-like"
+# )
+# seurat_list$`12`@meta.data %>%
+#   mutate(sample_description2 = str_c(
+#     time_point,
+#     sample_description_FN,
+#     sep = "_"
+#   ))  %>% 
+#   ggplot(aes(sample_description2, oxphos2, fill = is_richter_like, color = is_richter_like)) +
+#     geom_violin(alpha = 0.35) +
+#     geom_sina(size = 0.5, alpha = 1) +
+#     scale_color_manual(values = c("#dcdddc", "#cd8899")) +
+#     scale_fill_manual(values = c("#dcdddc", "#cd8899")) +
+#     labs(x = "", y = "OXPHOS score", color = "", fill = "") +
+#     theme_bw() +
+#     theme(axis.text.x = element_text(angle = 45, hjust = 0.95, color = "black"))
 ```
+
 
 # Save
 
