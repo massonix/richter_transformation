@@ -1,5 +1,5 @@
 ---
-title: 'Clonal evolution'
+title: 'Clonal evolution: CLL to Richter transformation'
 author: "Ramon Massoni-Badosa"
 date: "2021/04/09"
 output: 
@@ -37,7 +37,11 @@ library(tidyverse)
 
 ```{r}
 # Paths
-path_to_obj <- here::here("results/R_objects/6.seurat_list_annotated.rds")
+path_to_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
+path_to_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
+path_to_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
+path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
 
 
 # Colors
@@ -55,7 +59,15 @@ source(here::here("bin/utils.R"))
 ## Load data
 
 ```{r}
-seurat_list <- readRDS(path_to_obj)
+paths_to_load <- c(
+  "12" = path_to_12,
+  "19" = path_to_19,
+  "63" = path_to_63,
+  "365" = path_to_365,
+  "3299" = path_to_3299
+)
+seurat_list <- purrr::map(paths_to_load, readRDS)
+seurat_list
 purrr::map(seurat_list, DimPlot, cols = color_palette)
 ```
 
@@ -64,9 +76,18 @@ purrr::map(seurat_list, DimPlot, cols = color_palette)
 
 ## UMAPs splitted by time point
 
-```{r}
+```{r fig.wide=TRUE}
+seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj@meta.data <- seurat_obj@meta.data %>%
+    mutate(sample_description_RM = str_c(
+      time_point,
+      sample_description_FN,
+      sep = "_"
+    ))
+  seurat_obj
+})
 umaps_time_points <- purrr::map(names(seurat_list), function(x) {
-  p <- plot_split_umap(seurat_list[[x]], "time_point") +
+  p <- plot_split_umap(seurat_list[[x]], "sample_description_RM", pt_size = 0.5) +
     ggtitle(x) +
     theme(plot.title = element_text(size = 13, hjust = 0.5, face = "bold"))
   p
@@ -76,18 +97,18 @@ umaps_time_points
 ```
 
 
-## Stacked areas
+## Stacked bar plots
 
 Let us start by computing the proportions of clons across time points:
 
 ```{r}
 proportions_dfs <- purrr::map(seurat_list, function(seurat_obj) {
   df <- seurat_obj@meta.data %>%
-    select("time_point", "annotation") %>%
-    group_by(time_point, annotation) %>%
+    select("sample_description_RM", "annotation_final") %>%
+    group_by(sample_description_RM, annotation_final) %>%
     summarise(n_cells = n()) %>%
     ungroup() %>%
-    group_by(time_point) %>%
+    group_by(sample_description_RM) %>%
     mutate(n_cells_total = sum(n_cells)) %>%
     ungroup() %>%
     mutate(percentage_cells = round(n_cells / n_cells_total * 100, 3))
@@ -95,33 +116,32 @@ proportions_dfs <- purrr::map(seurat_list, function(seurat_obj) {
 })
 DT::datatable(proportions_dfs$`12`)
 DT::datatable(proportions_dfs$`19`)
+DT::datatable(proportions_dfs$`63`)
+DT::datatable(proportions_dfs$`365`)
 DT::datatable(proportions_dfs$`3299`)
 ```
 
 Plots:
 
 ```{r}
-stacked_areas_ggs <- purrr::map(names(proportions_dfs), function(x) {
+stacked_bars_ggs <- purrr::map(names(proportions_dfs), function(x) {
   p <- proportions_dfs[[x]] %>%
-    mutate(time_point = as.numeric(str_remove(time_point, "T"))) %>%
-    ggplot(aes(time_point, percentage_cells, fill = annotation)) +
-      geom_area() +
+    ggplot(aes(sample_description_RM, percentage_cells, fill = annotation_final)) +
+      geom_col() +
       ggtitle(x) +
-      labs(x = "Time Point", y = "Percentage of Cells (%)", fill = "") + 
+      labs(x = "", y = "Percentage of Cells (%)", fill = "") + 
       scale_fill_manual(values = color_palette) +
       theme_bw() +
-      theme(plot.title = element_text(size = 13, hjust = 0.5, face = "bold"))
+      theme(
+        plot.title = element_text(size = 13, hjust = 0.5, face = "bold"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
+      )
   p
 })
-stacked_areas_ggs
+names(stacked_bars_ggs) <- names(seurat_list)
+stacked_bars_ggs
 ```
 
-  
-## Stacked bar plots
-
-```{r}
-
-```
 
 
 # Session Inforamation
