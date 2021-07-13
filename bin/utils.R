@@ -179,3 +179,126 @@ ma_plot <- function(df,
       max.overlaps = 20
     )
 }
+
+
+
+plot_annotation_12 <- function(seurat_obj, pt_size = 0.5) {
+  Idents(seurat_obj) <- "annotation_final"
+  cols <- c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151",
+            "mediumorchid3")
+  names(cols) <- levels(seurat$annotation_final)
+  p <- DimPlot(seurat, pt.size = pt_size)
+  col_labels <- c(
+    "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
+    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
+    "MIR155HGhi" = bquote(MIR155HG^hi),
+    "CCND2lo RT-like" = bquote(CCND2^lo~"RT-like"),
+    "CCND2hi RT-like" = bquote(CCND2^hi~"RT-like"),
+    "RT-like proliferative" = bquote("RT-like proliferative"),
+    "MZB1hiIGHMhiXBP1hi" = bquote(MZB1^hi~IGHM^hi~XBP1^hi)
+  )
+  p <- p +
+    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank()
+    )
+  p
+}
+
+
+plot_annotation_19 <- function(seurat_obj, pt_size = 0.5) {
+  Idents(seurat_obj) <- "annotation_final"
+  cols <- c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151")
+  names(cols) <- levels(seurat_obj$annotation_final)
+  p <- DimPlot(seurat_obj, pt.size = pt_size)
+  col_labels <- c(
+    "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
+    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
+    "MIR155HGhi CLL-like" = bquote(MIR155HG^hi~"CLL-like"),
+    "MIR155HGhi RT-like" = bquote(MIR155HG^hi~"RT-like"),
+    "TP53INP1hi RT-like" = bquote(TP53INP1^hi~"RT-like"),
+    "RT-like proliferative" = bquote("RT-like proliferative")
+  )
+  p <- p +
+    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank()
+    )
+  p
+}
+
+
+plot_annotation_3299 <- function(seurat_obj, pt_size = 0.5) {
+  Idents(seurat_obj) <- "annotation_final"
+  cols <- c("#d4d4d4", "#8c8c8c", "#5e5e5e", "#000000", "#d65c7a")
+  names(cols) <- levels(seurat_obj$annotation_final)
+  p <- DimPlot(seurat_obj, pt.size = pt_size)
+  col_labels <- c(
+    "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
+    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
+    "CD83loMIR155HGhi" = bquote(CD83^lo~MIR155HG^hi),
+    "CD83hiMIR155HGhi" = bquote(CD83^hi~MIR155HG^hi),
+    "RT-like" = bquote("RT-like")
+  )
+  p <- p +
+    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank()
+    )
+  p
+}
+
+
+plot_annotation_63 <- function(seurat_obj, pt_size = 0.5) {
+  Idents(seurat_obj) <- "annotation_final"
+  cols <- c("#808080", "#d65c7a", "#813151")
+  names(cols) <- levels(seurat_obj$annotation_final)
+  p <- DimPlot(seurat_obj, pt.size = pt_size)
+  col_labels <- c(
+    "CLL-like" = bquote("CLL-like"),
+    "RT-like quiescent" = bquote("RT-like quiescent"),
+    "RT-like proliferative" = bquote("RT-like proliferative")
+  )
+  p <- p +
+    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank()
+    )
+  p
+}
+
+
+plot_annotation_365 <- function(seurat_obj, pt_size = 0.5) {
+  Idents(seurat_obj) <- "annotation_final"
+  cols <- c("#cfc9c9", "#808080", "#333333", "#d65c7a", "#813151")
+  names(cols) <- levels(seurat_obj$annotation_final)
+  p <- DimPlot(seurat_obj, pt.size = pt_size)
+  col_labels <- c(
+    "CLL-like" = bquote("CLL-like"),
+    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
+    "MIR155HGhi" = bquote(MIR155HG^hi),
+    "RT-like quiescent" = bquote("RT-like quiescent"),
+    "RT-like proliferative" = bquote("RT-like proliferative")
+  )
+  p <- p +
+    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank()
+    )
+  p
+}

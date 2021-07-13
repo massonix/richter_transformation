@@ -160,7 +160,7 @@ Idents(seurat) <- "annotation_final"
 
 
 # Plot UMAP
-cols <- c("gray79", "#9d9fa1", "gray30", "#f6c7c4", "#c88495")
+cols <- c("#d4d4d4", "#8c8c8c", "#5e5e5e", "#000000", "#d65c7a")
 names(cols) <- levels(seurat$annotation_final)
 umap_annotation <- DimPlot(seurat, pt.size = 0.5)
 col_labels <- c(
@@ -247,10 +247,16 @@ markers_list <- purrr::map(levels(markers$annotation), function(x) {
 })
 names(markers_list) <- levels(markers$annotation)
 markers_list <- markers_list[reordered_levels_3299]
+markers_final <- bind_rows(markers_list)
+saveRDS(markers_list, path_to_save_markers)
+saveRDS(
+  markers_final,
+  here::here("results/tables/markers/markers_annotated_clusters_patient_3299.rds")
+)
 saveRDS(markers_list, path_to_save_markers)
 openxlsx::write.xlsx(
   x = markers_list,
-  file = "results/tables/markers/markers_annotated_clusters_patient_3299.xlsx"
+  file = here::here("results/tables/markers/markers_annotated_clusters_patient_3299.xlsx")
 )
 ```
 
