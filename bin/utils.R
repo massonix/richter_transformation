@@ -97,12 +97,12 @@ process_seurat <- function(seurat_obj, dims = 1:30) {
 }
 
 
-plot_split_umap <- function(seurat_obj, var) {
+plot_split_umap <- function(seurat_obj, var, pt_size) {
   df <- as.data.frame(seurat_obj@reductions$umap@cell.embeddings)
   df$new_var <- seurat_obj@meta.data[[var]]
   p <- df %>%
     ggplot(aes(UMAP_1, UMAP_2, color = new_var)) +
-    geom_point(size = 0.1) +
+    geom_point(size = pt_size) +
     facet_wrap(~new_var) +
     theme_classic() +
     theme(legend.position = "none")
