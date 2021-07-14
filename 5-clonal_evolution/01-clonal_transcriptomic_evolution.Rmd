@@ -68,7 +68,18 @@ paths_to_load <- c(
 )
 seurat_list <- purrr::map(paths_to_load, readRDS)
 seurat_list
-purrr::map(seurat_list, DimPlot, cols = color_palette)
+umaps_annotations <- purrr::map(names(seurat_list), function(x) {
+  p <- plot_annotation(
+    seurat_list[[x]],
+    pt_size = 0.5,
+    colors_reference = color_annotations,
+    patient_id = x
+  )
+  p +
+    ggtitle(x) +
+    theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
+})
+umaps_annotations
 ```
 
 
@@ -77,19 +88,13 @@ purrr::map(seurat_list, DimPlot, cols = color_palette)
 ## UMAPs splitted by time point
 
 ```{r fig.wide=TRUE}
-seurat_list <- purrr::map(seurat_list, function(seurat_obj) {
-  seurat_obj@meta.data <- seurat_obj@meta.data %>%
-    mutate(sample_description_RM = str_c(
-      time_point,
-      sample_description_FN,
-      sep = "_"
-    ))
-  seurat_obj
-})
 umaps_time_points <- purrr::map(names(seurat_list), function(x) {
-  p <- plot_split_umap(seurat_list[[x]], "sample_description_RM", pt_size = 0.5) +
-    ggtitle(x) +
-    theme(plot.title = element_text(size = 13, hjust = 0.5, face = "bold"))
+  p <- plot_split_annotation(
+    seurat_list[[x]],
+    split_by = "time_point",
+    colors_reference = color_annotations,
+    patient_id = x
+  )
   p
 })
 names(umaps_time_points) <- names(seurat_list)
@@ -104,11 +109,11 @@ Let us start by computing the proportions of clons across time points:
 ```{r}
 proportions_dfs <- purrr::map(seurat_list, function(seurat_obj) {
   df <- seurat_obj@meta.data %>%
-    select("sample_description_RM", "annotation_final") %>%
-    group_by(sample_description_RM, annotation_final) %>%
+    select("time_point", "annotation_final") %>%
+    group_by(time_point, annotation_final) %>%
     summarise(n_cells = n()) %>%
     ungroup() %>%
-    group_by(sample_description_RM) %>%
+    group_by(time_point) %>%
     mutate(n_cells_total = sum(n_cells)) %>%
     ungroup() %>%
     mutate(percentage_cells = round(n_cells / n_cells_total * 100, 3))
@@ -126,7 +131,7 @@ Plots:
 ```{r}
 stacked_bars_ggs <- purrr::map(names(proportions_dfs), function(x) {
   p <- proportions_dfs[[x]] %>%
-    ggplot(aes(sample_description_RM, percentage_cells, fill = annotation_final)) +
+    ggplot(aes(time_point, percentage_cells, fill = annotation_final)) +
       geom_col() +
       ggtitle(x) +
       labs(x = "", y = "Percentage of Cells (%)", fill = "") + 
