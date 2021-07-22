@@ -120,7 +120,7 @@ markers <- markers %>%
   arrange(cluster) %>%
   group_by(cluster) %>%
   arrange(desc(avg_log2FC), .by_group = TRUE)
-DT::datatable(markers)
+DT::datatable(markers, options = list(scrollX = TRUE))
 ```
 
 
@@ -137,9 +137,9 @@ Important literature to annotate the cells:
 |---------|---------------------------|----------------------------|
 | 0       | CXCR4                     | CXCR4hiCD27lo              |
 | 1       | CD27                      | CXCR4loCD27hi              |
-| 2_0     | CCND2                     | CCND2hi RT-like            |
-| 2_1     | PAGE2, PAGE2B             | CCND2lo RT-like            |
-| 3       | TOP2A, MKI67              | RT-like proliferative      |
+| 2_0     | CCND2                     | CCND2hi RT                 |
+| 2_1     | PAGE2, PAGE2B             | CCND2lo RT                 |
+| 3       | TOP2A, MKI67              | RT proliferative           |
 | 4       | MIR155HG                  | MIR155HGhi                 |
 | 5       | IGHM, MZB1, XBP1          | MZB1hiIGHMhiXBP1hi         |
 
@@ -149,40 +149,25 @@ seurat$annotation_final <- factor(
   seurat$final_clusters,
   levels = c("0", "1", "2_0", "2_1", "3", "4", "5"),
 )
-new_levels_12 <- c("CXCR4hiCD27lo", "CXCR4loCD27hi", "CCND2hi RT-like",
-                   "CCND2lo RT-like", "RT-like proliferative", "MIR155HGhi",
+new_levels_12 <- c("CXCR4hiCD27lo", "CXCR4loCD27hi", "CCND2hi RT",
+                   "CCND2lo RT", "RT proliferative", "MIR155HGhi",
                    "MZB1hiIGHMhiXBP1hi")
 levels(seurat$annotation_final) <- new_levels_12
-reordered_levels_12 <- c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi",
-                         "CCND2lo RT-like", "CCND2hi RT-like",
-                         "RT-like proliferative", "MZB1hiIGHMhiXBP1hi")
-seurat$annotation_final <- factor(seurat$annotation_final, reordered_levels_12)
+seurat$annotation_final <- factor(
+  seurat$annotation_final,
+  color_annotations$`12`$annotation_final
+)
 Idents(seurat) <- "annotation_final"
 
 
 # Plot UMAP
-cols <- c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151",
-          "mediumorchid3")
-names(cols) <- levels(seurat$annotation_final)
-umap_annotation <- DimPlot(seurat, pt.size = 0.5)
-col_labels <- c(
-  "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
-  "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
-  "MIR155HGhi" = bquote(MIR155HG^hi),
-  "CCND2lo RT-like" = bquote(CCND2^lo~"RT-like"),
-  "CCND2hi RT-like" = bquote(CCND2^hi~"RT-like"),
-  "RT-like proliferative" = bquote("RT-like proliferative"),
-  "MZB1hiIGHMhiXBP1hi" = bquote(MZB1^hi~IGHM^hi~XBP1^hi)
-)
-umap_annotation <- umap_annotation +
-  scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
-  theme(
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    axis.line = element_blank()
-  )
-umap_annotation
+(umap_annotation <- plot_annotation(
+  seurat_obj = seurat,
+  pt_size = 0.5,
+  colors_reference = color_annotations,
+  patient_id = "12",
+  nothing = TRUE
+))
 ```
 
 
@@ -192,44 +177,37 @@ umap_annotation
 # UMAPs
 genes_interest <- c("CXCR4", "CD24", "CD27", "MIR155HG", "CCND2", "TOP2A",
                     "PCNA", "MZB1", "IGHM", "XBP1")
-feature_plots <- purrr::map(genes_interest, function(x) {
+(feature_plots <- purrr::map(genes_interest, function(x) {
   p <- FeaturePlot(seurat, x, pt.size = 0.5) +
     scale_color_viridis_c(option = "magma")
   p
-})
-feature_plots
+}))
 
 
 # Dot plots
-dot_plot <- DotPlot(seurat, features = rev(genes_interest)) +
-  coord_flip() +
-  scale_color_viridis_c(option = "magma") +
-  scale_y_discrete(breaks = names(col_labels), labels = col_labels) +
-  theme(
-    axis.title = element_blank(),
-    axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
-    legend.title = element_text(size = 12)
-  )
-dot_plot
+(dot_plot <- plot_dot_plot(
+  seurat,
+  goi = rev(genes_interest),
+  colors_reference = color_annotations,
+  patient_id = "12"
+))
 
 
 # Violin plots
-vln_plot_s <- seurat@meta.data %>%
-  ggplot(aes(annotation_final, S.Score)) +
-    geom_violin(fill = "gray") +
-    labs(x = "", y = "S Phase Score") +
-    scale_x_discrete(breaks = names(col_labels), labels = col_labels) +
-    theme_bw() +
-    theme(axis.text.x = element_text(color = "black", angle = 45, vjust = 1, hjust = 1, size = 11))
-vln_plot_s
-vln_plot_g2m <- seurat@meta.data %>%
-  ggplot(aes(annotation_final, G2M.Score)) +
-    geom_violin(fill = "gray") +
-    labs(x = "", y = "G2M Phase Score") +
-    scale_x_discrete(breaks = names(col_labels), labels = col_labels) +
-    theme_bw() +
-    theme(axis.text.x = element_text(color = "black", angle = 45, vjust = 1, hjust = 1, size = 11))
-vln_plot_g2m
+(vln_plot_s <- plot_violin_plot(
+  seurat,
+  continuous_var = "S.Score",
+  ylab = "S Phase Score",
+  colors_reference = color_annotations,
+  patient_id = "12"
+))
+(vln_plot_g2m <- plot_violin_plot(
+  seurat,
+  continuous_var = "G2M.Score",
+  ylab = "G2M Phase Score",
+  colors_reference = color_annotations,
+  patient_id = "12"
+))
 ```
 
 
@@ -249,7 +227,7 @@ markers_list <- purrr::map(levels(markers$annotation), function(x) {
   df
 })
 names(markers_list) <- levels(markers$annotation)
-markers_list <- markers_list[reordered_levels_12]
+markers_list <- markers_list[color_annotations$`12`$annotation_final]
 markers_final <- bind_rows(markers_list)
 saveRDS(markers_list, path_to_save_markers)
 saveRDS(
