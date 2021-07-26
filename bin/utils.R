@@ -182,123 +182,200 @@ ma_plot <- function(df,
 
 
 
-plot_annotation_12 <- function(seurat_obj, pt_size = 0.5) {
+plot_annotation <- function(seurat_obj,
+                            pt_size = 0.5,
+                            colors_reference,
+                            patient_id,
+                            nothing = TRUE) {
   Idents(seurat_obj) <- "annotation_final"
-  cols <- c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151",
-            "mediumorchid3")
-  names(cols) <- levels(seurat$annotation_final)
-  p <- DimPlot(seurat, pt.size = pt_size)
-  col_labels <- c(
-    "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
-    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
-    "MIR155HGhi" = bquote(MIR155HG^hi),
-    "CCND2lo RT-like" = bquote(CCND2^lo~"RT-like"),
-    "CCND2hi RT-like" = bquote(CCND2^hi~"RT-like"),
-    "RT-like proliferative" = bquote("RT-like proliferative"),
-    "MZB1hiIGHMhiXBP1hi" = bquote(MZB1^hi~IGHM^hi~XBP1^hi)
-  )
-  p <- p +
-    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
-    theme(
-      axis.title = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.line = element_blank()
-    )
-  p
-}
-
-
-plot_annotation_19 <- function(seurat_obj, pt_size = 0.5) {
-  Idents(seurat_obj) <- "annotation_final"
-  cols <- c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151")
-  names(cols) <- levels(seurat_obj$annotation_final)
   p <- DimPlot(seurat_obj, pt.size = pt_size)
-  col_labels <- c(
-    "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
-    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
-    "MIR155HGhi CLL-like" = bquote(MIR155HG^hi~"CLL-like"),
-    "MIR155HGhi RT-like" = bquote(MIR155HG^hi~"RT-like"),
-    "TP53INP1hi RT-like" = bquote(TP53INP1^hi~"RT-like"),
-    "RT-like proliferative" = bquote("RT-like proliferative")
-  )
   p <- p +
-    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
-    theme(
-      axis.title = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.line = element_blank()
+    scale_color_manual(
+      values = colors_reference[[patient_id]][["colors"]],
+      breaks = colors_reference[[patient_id]][["annotation_final"]],
+      labels = colors_reference[[patient_id]][["custom_labels"]]
+    )
+  if (nothing == TRUE) {
+    p <- p +
+      theme(
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank()
+      )
+    p
+  } else{
+    p
+  }
+}
+
+
+plot_split_annotation <- function(seurat_obj,
+                                  pt_size = 0.5,
+                                  split_by,
+                                  colors_reference,
+                                  patient_id,
+                                  n_col = 3) {
+  p <- DimPlot(
+    seurat_obj,
+    pt.size = pt_size,
+    split.by = split_by,
+    ncol = n_col
+  ) &
+    scale_color_manual(
+      values = colors_reference[[patient_id]][["colors"]],
+      breaks = colors_reference[[patient_id]][["annotation_final"]],
+      labels = colors_reference[[patient_id]][["custom_labels"]]
     )
   p
 }
 
 
-plot_annotation_3299 <- function(seurat_obj, pt_size = 0.5) {
-  Idents(seurat_obj) <- "annotation_final"
-  cols <- c("#d4d4d4", "#8c8c8c", "#5e5e5e", "#000000", "#d65c7a")
-  names(cols) <- levels(seurat_obj$annotation_final)
-  p <- DimPlot(seurat_obj, pt.size = pt_size)
-  col_labels <- c(
-    "CXCR4hiCD27lo" = bquote(CXCR4^hi~CD27^lo),
-    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
-    "CD83loMIR155HGhi" = bquote(CD83^lo~MIR155HG^hi),
-    "CD83hiMIR155HGhi" = bquote(CD83^hi~MIR155HG^hi),
-    "RT-like" = bquote("RT-like")
-  )
-  p <- p +
-    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+plot_dot_plot <- function(seurat_obj,
+                          goi,
+                          colors_reference,
+                          patient_id) {
+  p <- DotPlot(seurat_obj, features = rev(goi)) +
+    scale_color_distiller(palette = "Blues", direction = 1) +
+    scale_y_discrete(
+      limits = rev(colors_reference[[patient_id]][["annotation_final"]]),
+      labels = rev(colors_reference[[patient_id]][["custom_labels"]])
+    ) +
     theme(
       axis.title = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.line = element_blank()
+      axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+      legend.title = element_text(size = 12)
+    )
+  p$guides$colour$title <- "Average\nExpression"
+  p$guides$size$title <- "Percent\nExpressed"
+  p
+}
+
+
+plot_violin_plot <- function(seurat_obj,
+                             continuous_var,
+                             ylab,
+                             colors_reference,
+                             patient_id) {
+  p <- seurat_obj@meta.data %>%
+    ggplot(aes_string("annotation_final", continuous_var, fill = "annotation_final")) +
+    geom_hline(yintercept = 0, color = "gray35", linetype = "dotted") +
+    geom_violin(color = NA) +
+    labs(x = "", y = ylab) +
+    scale_x_discrete(
+      breaks = colors_reference[[patient_id]][["annotation_final"]],
+      labels = colors_reference[[patient_id]][["custom_labels"]]) +
+    scale_fill_manual(
+      values = colors_reference[[patient_id]][["colors"]],
+      breaks = colors_reference[[patient_id]][["annotation_final"]],
+      labels = colors_reference[[patient_id]][["custom_labels"]]
+    ) +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(
+        color = "black",
+        angle = 45,
+        vjust = 1,
+        hjust = 1,
+        size = 11
+      )
     )
   p
 }
 
 
-plot_annotation_63 <- function(seurat_obj, pt_size = 0.5) {
-  Idents(seurat_obj) <- "annotation_final"
-  cols <- c("#808080", "#d65c7a", "#813151")
-  names(cols) <- levels(seurat_obj$annotation_final)
-  p <- DimPlot(seurat_obj, pt.size = pt_size)
-  col_labels <- c(
-    "CLL-like" = bquote("CLL-like"),
-    "RT-like quiescent" = bquote("RT-like quiescent"),
-    "RT-like proliferative" = bquote("RT-like proliferative")
-  )
-  p <- p +
-    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
+plot_ridge <- function(seurat_obj,
+                       feature,
+                       x_lab,
+                       colors_reference,
+                       patient_id) {
+  p <- seurat_obj@meta.data %>%
+    mutate(annotation_final = factor(
+      annotation_final,
+      levels = rev(colors_reference[[patient_id]][["annotation_final"]])
+    )) %>%
+    ggplot(aes_string(feature, "annotation_final", fill = "annotation_final")) +
+    ggridges::geom_density_ridges() +
+    scale_y_discrete(
+      breaks = rev(colors_reference[[patient_id]][["annotation_final"]]),
+      labels = rev(colors_reference[[patient_id]][["custom_labels"]])
+    ) +
+    scale_fill_manual(
+      values = rev(colors_reference[[patient_id]][["colors"]]),
+      breaks = rev(colors_reference[[patient_id]][["annotation_final"]]),
+      labels = rev(colors_reference[[patient_id]][["custom_labels"]])
+    ) +
+    labs(title = "", x = x_lab, y = "") +
+    theme_bw() +
     theme(
-      axis.title = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.line = element_blank()
+      legend.position = "none",
+      panel.border = element_blank(),
+      axis.ticks.y = element_blank()
     )
   p
 }
 
 
-plot_annotation_365 <- function(seurat_obj, pt_size = 0.5) {
-  Idents(seurat_obj) <- "annotation_final"
-  cols <- c("#cfc9c9", "#808080", "#333333", "#d65c7a", "#813151")
-  names(cols) <- levels(seurat_obj$annotation_final)
-  p <- DimPlot(seurat_obj, pt.size = pt_size)
-  col_labels <- c(
-    "CLL-like" = bquote("CLL-like"),
-    "CXCR4loCD27hi" = bquote(CXCR4^lo~CD27^hi),
-    "MIR155HGhi" = bquote(MIR155HG^hi),
-    "RT-like quiescent" = bquote("RT-like quiescent"),
-    "RT-like proliferative" = bquote("RT-like proliferative")
-  )
-  p <- p +
-    scale_color_manual(values = cols, breaks = names(cols), labels = col_labels) +
-    theme(
-      axis.title = element_blank(),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.line = element_blank()
-    )
-  p
+ggpreview <- function (x, w = 5, h = 5, dpi = 150, units = "in") {
+  if (!units %in% c("in", "px", "cm", "mm")) {
+    stop("units has to be: in, px, cm, or mm")
+  }
+  tmp <- tempfile(fileext = ".png")
+  grDevices::png(filename = tmp, width = w, height = h, res = dpi, 
+                 units = units)
+  print(x)
+  grDevices::dev.off()
+  rstudioapi::viewer(tmp)
 }
+
+color_annotations <- list(
+  "12" = list(
+    annotation_final = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi", "CCND2lo RT",
+                         "CCND2hi RT", "RT proliferative", "MZB1hiIGHMhiXBP1hi"),
+    colors = c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151",
+               "mediumorchid3"),
+    custom_labels = list(bquote(CXCR4^hi~CD27^lo), bquote(CXCR4^lo~CD27^hi), bquote(MIR155HG^hi),
+                         bquote(CCND2^lo~"RT"), bquote(CCND2^hi~"RT"), bquote("RT proliferative"),
+                         bquote(MZB1^hi~IGHM^hi~XBP1^hi))
+  ),
+  "19" = list(
+    annotation_final = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi CLL",
+                         "MIR155HGhi RT", "TP53INP1hi RT", "RT proliferative"),
+    colors = c("#cfc9c9", "#808080", "#333333", "#fcd2cf", "#d65c7a", "#813151"),
+    custom_labels = list(bquote(CXCR4^hi~CD27^lo), bquote(CXCR4^lo~CD27^hi), bquote(MIR155HG^hi~"CLL"),
+                         bquote(MIR155HG^hi~"RT"), bquote(TP53INP1^hi~"RT"), 
+                         bquote("RT proliferative"))
+  ),
+  "63" = list(
+    annotation_final = c("CLL", "RT quiescent", "RT proliferative"),
+    colors = c("#808080", "#d65c7a", "#813151"),
+    custom_labels = list(bquote("CLL"), bquote("RT quiescent"), bquote("RT proliferative"))
+  ),
+  "365" = list(
+    annotation_final = c("CLL", "CXCR4loCD27hi RT", "MIR155HGhi RT", "RT quiescent",
+                         "RT proliferative"),
+    colors = c("#cfc9c9", "#808080", "#333333", "#d65c7a", "#813151"),
+    custom_labels = list(bquote("CLL"), bquote(CXCR4^lo~CD27^hi~"RT"), bquote(MIR155HG^hi~"RT"),
+                         bquote("RT quiescent"), bquote("RT proliferative"))
+  ),
+  "3299" = list(
+    annotation_final = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "CD83loMIR155HGhi",
+                         "CD83hiMIR155HGhi", "RT"),
+    colors = c("#d4d4d4", "#8c8c8c", "#5e5e5e", "#000000", "#d65c7a"),
+    custom_labels = list(bquote(CXCR4^hi~CD27^lo), bquote(CXCR4^lo~CD27^hi), bquote(CD83^lo~MIR155HG^hi),
+                         bquote(CD83^hi~MIR155HG^hi), bquote("RT"))
+  )
+)
+
+
+genes_to_dotplot <- list(
+  "19" = c("CXCR4", "CD27", "S100A4", "MIR155HG", "MS4A1", "ENO1",
+           "CCR7", "TCL1A", "TP53INP1", "PIK3IP1", "MKI67", "PCNA"),
+  "63" = c("CXCR4", "TCL1A", "BTK", "WNT3", "PCNA", "MKI67"),
+  "365" = c("CXCR4", "CD27", "MIR155HG", "ENO1", "TCL1A",
+            "PCNA", "MKI67"),
+  "3299" =  c("CXCR4", "CD24", "CD27", "S100A4", "MS4A1",
+              "MIR155HG",  "CD83", "ENO1", "CD40", "CCR7", "KLF6",
+              "PIK3IP1")
+)
