@@ -7,6 +7,7 @@ library(Seurat)
 library(tidyverse)
 library(patchwork)
 library(ggtext)
+library(ggpubr)
 
 
 # Source scripts and variables
@@ -53,11 +54,23 @@ umaps_tissue <- purrr::map2(seurat_list, names(seurat_list), function(seurat_obj
     )
   p
 })
+legends_tissues <- purrr::map(umaps_tissue, function(p) {
+  p <- p +
+    guides(colour = guide_legend(override.aes = list(size = 2))) 
+  leg <- as_ggplot(get_legend(p))
+  leg
+})
 umaps_tissue <- purrr::map(umaps_tissue, function(p) {
   p <- p + theme(legend.position = "none")
   p
 })
-                            
+seurat_merged <- merge(seurat_list$`365`, seurat_list$`3299`)
+seurat_merged <- process_seurat(seurat_merged, dims = 1:10)
+p <- DimPlot(seurat_merged, group.by = "tissue") +
+  scale_color_manual(values = color_tissue ) +
+  theme(legend.text = element_text(size = 7), legend.position = "top")
+legend_tissues <- as_ggplot(get_legend(p))
+
 
 # UMAPs and dot plot annotations
 umaps_annotation <- purrr::map2(seurat_list, names(seurat_list), function(seurat_obj, x) {
@@ -73,8 +86,12 @@ umaps_annotation <- purrr::map2(seurat_list, names(seurat_list), function(seurat
       legend.position = "top",
       legend.text = element_text(size = 7)
     ) +
-    guides(color = guide_legend(nrow = 2, byrow = TRUE))
+    guides(color = guide_legend(nrow = 2, byrow = TRUE, override.aes = list(size = 2)))
   p
+})
+legends_annotation <- purrr::map(umaps_annotation, function(p) {
+  leg <- as_ggplot(get_legend(p))
+  leg
 })
 umaps_annotation <- purrr::map(umaps_annotation, function(p) {
   p <- p + theme(legend.position = "none")
@@ -88,28 +105,33 @@ dot_plots <- purrr::map2(seurat_list, names(seurat_list), function(seurat_obj, x
     patient_id = x
   )
   p <- p +
-    scale_size_continuous(range = c(0.1, 4.5)) +
+    scale_size_continuous(range = c(0.1, 3.5)) +
     theme(
       axis.text.x = element_text(size = 6),
       axis.text.y = element_blank(),
       axis.line = element_line(size = 0.25),
       axis.ticks = element_line(size = 0.25),
-      legend.title = element_text(size = 8),
-      legend.text = element_text(size = 7),
-      legend.position = "right",
-      legend.box = 'vertical'
-      # legend.box = "vertical"
+      legend.title = element_text(size = 6),
+      legend.text = element_text(size = 5.5),
+      legend.position = "top",
+      legend.box = "vertical",
+      legend.key.size = unit(0.3, "cm"),
+      legend.spacing = unit(0.1, units = "cm")
     )
   p
+})
+legends_dot_plots <- purrr::map(dot_plots, function(p) {
+  leg <- as_ggplot(get_legend(p))
+  leg
 })
 dot_plots <- purrr::map(dot_plots, function(p) {
   p <- p + theme(legend.position = "none")
   p
 })
-dot_plots$`19` <- dot_plots$`19` +
-  scale_size_continuous(range = c(0.1, 3.5))
-dot_plots$`3299` <- dot_plots$`3299` +
-  scale_size_continuous(range = c(0.1, 3.5))
+# dot_plots$`19` <- dot_plots$`19` +
+#   scale_size_continuous(range = c(0.1, 3.5))
+# dot_plots$`3299` <- dot_plots$`3299` +
+#   scale_size_continuous(range = c(0.1, 3.5))
 
 
 # Violin plots proliferation
@@ -158,13 +180,17 @@ fig_rows <- purrr::map(names(seurat_list), function(x) {
   ps
 })
 names(fig_rows) <- names(seurat_list)
+legends <- plot_spacer() + legend_tissues + legends_dot_plots[[1]] + plot_spacer()
+legends <- legends + plot_layout(ncol = 4, widths = c(1.5, 1.5, 1.25, 1))
 fig <- (
+  legends /
   fig_rows$`19` /
   fig_rows$`63` /
   fig_rows$`365` /
   fig_rows$`3299` 
 )
-
+fig  <- fig +
+  plot_layout(heights = c(0.25, 1, 1, 1, 1))
 
 # Save
 ggsave(
@@ -175,5 +201,30 @@ ggsave(
   height = 28, 
   units = "cm"
 )
-
+walk(names(seurat_list), function(x) {
+  ggsave(
+    filename = str_c(here::here("results/plots/paper/legends/rt_annotation_supplementary_legend_annotation_"), x, ".pdf", sep = ""),
+    plot = legends_annotation[[x]],
+    device = cairo_pdf,
+    width = 12, 
+    height = 4, 
+    units = "cm"
+  )
+  ggsave(
+    filename = str_c(here::here("results/plots/paper/legends/rt_annotation_supplementary_legend_tissue_"), x, ".pdf", sep = ""),
+    plot = legends_tissues[[x]],
+    device = cairo_pdf,
+    width = 12,
+    height = 4,
+    units = "cm"
+  )
+  ggsave(
+    filename = str_c(here::here("results/plots/paper/legends/rt_annotation_supplementary_legend_dotplot_"), x, ".pdf", sep = ""),
+    plot = legends_dot_plots[[x]],
+    device = cairo_pdf,
+    width = 12, 
+    height = 4, 
+    units = "cm"
+  )
+})
 

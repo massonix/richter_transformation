@@ -57,7 +57,6 @@ violin_plot_s_phase <- plot_violin_plot(
   patient_id = "12"
 )
 violin_plot_s_phase <- violin_plot_s_phase +
-  # geom_hline(yintercept = 0, color = "gray85", linetype = "dashed") +
   theme(
     axis.text.x = element_blank(),
     axis.line = element_line(size = 0.25),
@@ -72,7 +71,6 @@ violin_plot_g2m_phase <- plot_violin_plot(
   patient_id = "12"
 )
 violin_plot_g2m_phase <- violin_plot_g2m_phase +
-  # geom_hline(yintercept = 0, color = "gray85", linetype = "dashed") +
   theme(
     axis.title.y = element_text(size = 9),
     axis.text.x = element_blank(),
@@ -122,6 +120,31 @@ fig
 # fig <- fig_top / fig_bottom
 
 
+# To complete it, we need the total number of cells and percentage of RT cells
+# per time-point
+n_cells_rt <- seurat@meta.data %>%
+  group_by(time_point, annotation_final) %>%
+  dplyr::count(.drop = FALSE, ) %>%
+  ungroup() %>%
+  group_by(time_point) %>%
+  mutate(
+    n_cells_total = sum(n),
+    percentage_total = n / n_cells_total * 100
+  )
+pct_seed_cells <- n_cells_rt %>%
+  mutate(is_richter = str_detect(annotation_final, "RT")) %>%
+  group_by(is_richter, time_point) %>%
+  summarise(n_rt_cells = sum(n), pct_rt_cells = sum(percentage_total)) %>%
+  filter(is_richter)
+pct_seed_cells$total_n_cells_time_point <- n_cells_rt %>%
+  group_by(time_point) %>%
+  top_n(1) %>%
+  pull(n_cells_total)
+selected_cols <- c("time_point", "total_n_cells_time_point", "n_rt_cells",
+                   "pct_rt_cells")
+pct_seed_cells <- pct_seed_cells[, selected_cols] 
+
+
 # Save
 ggsave(
   filename = here::here("results/plots/paper/rt_annotation_and_seeds.pdf"),
@@ -130,4 +153,8 @@ ggsave(
   width = 21, 
   height = 11, 
   units = "cm"
+)
+write_delim(
+  pct_seed_cells,
+  file = here::here("results/plots/paper/rt_annotation_and_seeds_number_of_cells.csv")
 )

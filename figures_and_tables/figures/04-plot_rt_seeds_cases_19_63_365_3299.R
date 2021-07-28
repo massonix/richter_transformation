@@ -25,3 +25,49 @@ paths_to_load <- c(
   "3299" = path_to_3299
 )
 seurat_list <- purrr::map(paths_to_load, readRDS)
+
+
+# UMAP RT seeds
+umaps_seed_cells <- purrr::map2(seurat_list, names(seurat_list), function(seurat_obj, x) {
+  p <- plot_split_annotation(
+    seurat_obj,
+    pt_size = 0.8,
+    split_by = "time_point",
+    colors_reference = color_annotations,
+    patient_id = x,
+    n_col = 3
+  )
+  p <- p &
+    NoLegend() &
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      axis.line = element_blank()
+    )
+  p
+})
+
+
+fig <- (
+  umaps_seed_cells$`19` /
+    umaps_seed_cells$`63` /
+    umaps_seed_cells$`365` /
+    umaps_seed_cells$`3299` 
+)
+fig <- fig +
+  plot_layout(heights = c(1.5, 1, 1, 1))
+
+
+# Save
+ggsave(
+  filename = here::here("results/plots/paper/rt_seed_cells_supplementary.pdf"),
+  plot = fig,
+  device = cairo_pdf,
+  width = 21, 
+  height = 28, 
+  units = "cm"
+)
+
+
+
