@@ -7,6 +7,7 @@ library(tidyverse)
 library(patchwork)
 library(ggtext)
 library(ggrepel)
+library(ggpubr)
 library(gridGraphics)
 
 
@@ -48,7 +49,7 @@ selected_avg_log2FC_l <- c(
 selected_avg_log2FC <- 1.25
 selected_pct_cells <- 10
 selected_significance_alpha <- alpha
-text_size <- 1.25
+text_size <- 1.5
 ma_plots <- purrr::map2(dea_list, names(dea_list), function(df, x) {
   selected_avg_log2FC <- selected_avg_log2FC_l[x]
   p <- ma_plot(
@@ -56,7 +57,8 @@ ma_plots <- purrr::map2(dea_list, names(dea_list), function(df, x) {
     selected_avg_log2FC = selected_avg_log2FC,
     selected_pct_cells = selected_pct_cells,
     selected_significance_alpha = selected_significance_alpha,
-    text_size = text_size
+    text_size = text_size,
+    max_overlaps = 30
   ) +
     ggtitle(x) +
     ylab(bquote("Mean"~log[2]~"(RT / CLL)")) +
@@ -64,6 +66,12 @@ ma_plots <- purrr::map2(dea_list, names(dea_list), function(df, x) {
   p
 })
 names(ma_plots) <- names(dea_list)
+
+
+# Get legend
+legend_dea <- ma_plots$`12`+
+  guides(colour = guide_legend(override.aes = list(size = 2))) 
+legend_dea <- as_ggplot(get_legend(legend_dea))
 
 
 # Upset plots
@@ -95,13 +103,20 @@ fig_ma_plots <- fig_ma_plots &
 
 # Save
 ggsave(
-  filename = here::here("results/plots/paper/rt_dea_ma_plots.pdf"),
+  filename = here::here("results/plots/paper/05-rt_dea_ma_plots_supplementary.pdf"),
   plot = fig_ma_plots,
   device = cairo_pdf,
-  width = 21, 
-  height = 14, 
+  width = 20, 
+  height = 13.5,
   units = "cm"
 )
-
+ggsave(
+  filename = here::here("results/plots/paper/legends/05-rt_dea_ma_plots_supplementary_legend.pdf"),
+  plot = legend_dea,
+  device = cairo_pdf,
+  width = 12,
+  height = 4,
+  units = "cm"
+)
 
 

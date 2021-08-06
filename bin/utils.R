@@ -175,8 +175,8 @@ ma_plot <- function(df,
       data = selected_data,
       aes(label = gene),
       color = "black",
-      size = 2.5,
-      max.overlaps = 20
+      size = text_size,
+      max.overlaps = max_overlaps
     )
 }
 
