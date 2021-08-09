@@ -9,6 +9,7 @@ library(ggtext)
 library(ggrepel)
 library(ggpubr)
 library(gridGraphics)
+library(UpSetR)
 
 
 # Source scripts and variables
@@ -77,8 +78,15 @@ legend_dea <- as_ggplot(get_legend(legend_dea))
 # Upset plots
 upregulated_richter <- purrr::map(dea_list, function(df) df$gene[df$direction == "up"])
 downregulated_richter <- purrr::map(dea_list, function(df) df$gene[df$direction == "down"])
-upset_upregulated <- upset(fromList(upregulated_richter), order.by = "freq")
-upset_downregulated <- upset(fromList(downregulated_richter), order.by = "freq")
+upset_upregulated <- upset(
+  fromList(upregulated_richter),
+  order.by = "freq",
+  show.numbers = FALSE,
+  nintersects = 10,
+  mb.ratio = c(0.5, 0.5),
+  point.size = 0.75
+)
+upset_downregulated <- upset(fromList(downregulated_richter), order.by = "freq", show.numbers = FALSE)
 
 
 # Arrange figure
@@ -118,5 +126,13 @@ ggsave(
   height = 4,
   units = "cm"
 )
+pdf(
+  file = here::here("results/plots/paper/05.1-rt_dea_upset_plots_supplementary.pdf"),
+  onefile = FALSE,
+  width = 2.6,
+  height = 2.5
+)
+upset_upregulated
+dev.off()
 
 
