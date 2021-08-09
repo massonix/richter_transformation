@@ -9,16 +9,20 @@ library(ggtext)
 library(ggrepel)
 library(ggpubr)
 library(gridGraphics)
+library(clusterProfiler)
 library(UpSetR)
 
 
 # Source scripts and variables
 source(here::here("bin/utils.R"))
+# source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
 
 
 # Load data
 path_to_gsea <- here::here("6-differential_expression_analysis/tmp/patient_specific_gsea_rt_vs_cll.rds")
 path_to_gsea_raw <- here::here("6-differential_expression_analysis/tmp/patient_specific_gsea_raw_rt_vs_cll.rds")
+# path_to_gsea <- "~/Desktop/CNAG/mnt_clust/RICHTER/current/6-differential_expression_analysis/tmp/patient_specific_gsea_rt_vs_cll.rds"
+# path_to_gsea_raw <- "~/Desktop/CNAG/mnt_clust/RICHTER/current/6-differential_expression_analysis/tmp/patient_specific_gsea_raw_rt_vs_cll.rds"
 gsea_sorted <- readRDS(path_to_gsea)
 gsea_patient_specific <- readRDS(path_to_gsea_raw)
 
@@ -32,8 +36,18 @@ downregulated_terms <- purrr::map(gsea_sorted, function(df) {
   x <- df$ID[df$NES < 0]
   x
 })
-upset_upregulated <- upset(fromList(upregulated_terms), order.by = "freq")
-upset_downregulated <- upset(fromList(downregulated_terms), order.by = "freq")
+upset_upregulated <- upset(
+  fromList(upregulated_terms),
+  order.by = "freq",
+  mb.ratio = c(0.5, 0.5),
+  show.numbers = FALSE
+)
+upset_downregulated <- upset(
+  fromList(downregulated_terms),
+  mb.ratio = c(0.5, 0.5),
+  order.by = "freq",
+  show.numbers = FALSE
+)
 
 
 # GSEA plots
@@ -45,6 +59,7 @@ gsea_plots <- purrr::map(gsea_patient_specific, function(obj) {
   plots <- purrr::map2(selected_terms, selected_titles, function(x, title) {
     p <- gseaplot(obj, geneSetID = x, by = "runningScore", title = title)
     p <- p +
+      theme_classic() +
       theme(
         plot.title = element_text(hjust = 0.5, size = 9),
         axis.title.x = element_blank(),
@@ -71,7 +86,7 @@ ggsave(
   plot = fig_gsea,
   device = cairo_pdf,
   width = 20, 
-  height = 12,
+  height = 13.5,
   units = "cm"
 )
 pdf(
