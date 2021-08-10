@@ -138,7 +138,7 @@ fig
 
 # Save
 ggsave(
-  filename = here::here("results/plots/paper/rt_oxphos_and_bcr_scRNA.pdf"),
+  filename = here::here("results/plots/paper/02-rt_oxphos_and_bcr_scRNA.pdf"),
   plot = fig,
   device = cairo_pdf,
   width = 21, 

@@ -147,7 +147,7 @@ pct_seed_cells <- pct_seed_cells[, selected_cols]
 
 # Save
 ggsave(
-  filename = here::here("results/plots/paper/rt_annotation_and_seeds.pdf"),
+  filename = here::here("results/plots/paper/01-rt_annotation_and_seeds.pdf"),
   plot = fig,
   device = cairo_pdf,
   width = 21, 

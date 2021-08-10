@@ -22,9 +22,9 @@ path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
 path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
 paths_to_load <- c(
   "19" = path_to_19,
+  "63" = path_to_63,
   "365" = path_to_365,
-  "3299" = path_to_3299,
-  "63" = path_to_63
+  "3299" = path_to_3299
 )
 seurat_list <- purrr::map(paths_to_load, readRDS)
 gene_sets_list <- readRDS(here::here("6-differential_expression_analysis/tmp/gene_sets_gsea_analysis.rds"))
@@ -91,7 +91,8 @@ ridgeplots_oxphos <- purrr::map2(seurat_list, names(seurat_list), function(seura
   )
   ridgeplot_oxphos <- ridgeplot_oxphos +
     theme(
-      axis.text = element_text(size = 5.5),
+      axis.text.x = element_text(size = 5.5),
+      axis.text.y = element_text(size = 6.5, color = "black"),
       axis.title = element_text(size = 8)
     )
   ridgeplot_oxphos
@@ -106,7 +107,8 @@ ridgeplots_bcr <- purrr::map2(seurat_list, names(seurat_list), function(seurat_o
   )
   ridgeplot_bcr <- ridgeplot_bcr +
     theme(
-      axis.text = element_text(size = 5.5),
+      axis.text.x = element_text(size = 5.5),
+      axis.text.y = element_text(size = 6.5, color = "black"),
       axis.title = element_text(size = 8)
     )
   ridgeplot_bcr
@@ -189,14 +191,14 @@ figs <- purrr::map(names(seurat_list), function(x) {
 names(figs) <- names(seurat_list)
 fig <-
   figs$`19` / 
+  figs$`63` /
   figs$`365` /
-  figs$`3299` /
-  figs$`63`
+  figs$`3299`
 
 
 # Save
 ggsave(
-  filename = here::here("results/plots/paper/rt_oxphos_and_bcr_scRNA_supplementary.pdf"),
+  filename = here::here("results/plots/paper/legends/06-rt_oxphos_and_bcr_scRNA_supplementary.pdf"),
   plot = fig,
   device = cairo_pdf,
   width = 21, 
@@ -204,7 +206,7 @@ ggsave(
   units = "cm"
 )
 ggsave(
-  filename = here::here("results/plots/paper/rt_oxphos_and_bcr_scRNA_supplementary_legend_violins.pdf"),
+  filename = here::here("results/plots/paper/06-rt_oxphos_and_bcr_scRNA_supplementary_legend_violins.pdf"),
   plot = legend_violins,
   device = cairo_pdf,
   width = 4, 
