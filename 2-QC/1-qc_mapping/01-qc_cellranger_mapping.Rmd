@@ -86,10 +86,10 @@ names(library_names) <- metadata$gem_id
 library_names <- library_names[!str_detect(library_names, "HTO")]
 qc$library_name <- library_names[qc$gem_id]
 print("QC summary table")
-DT::datatable(qc)
+DT::datatable(qc, options = list(scrollX = TRUE))
 
 print("Libraries metadata")
-DT::datatable(metadata)
+DT::datatable(metadata, options = list(scrollX = TRUE))
 ```
 
 
