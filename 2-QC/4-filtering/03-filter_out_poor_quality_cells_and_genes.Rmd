@@ -92,7 +92,7 @@ seurat$sample_id[seurat$sample_id == "19/12"] <- "19-12"
 sample_metadata_df[sample_metadata_df$sample_id == "19/2768B", ]
 
 
-test_identifiers <- all(unique(sample_metadata_df$sample_id) %in% unique(sample_metadata_df$sample_id))
+test_identifiers <- all(unique(seurat$sample_id) %in% unique(sample_metadata_df$sample_id))
 if (test_identifiers) {
   sample_metadata_df <- dplyr::select(sample_metadata_df, - "donor_id")
   new_metadata <- seurat@meta.data %>%
