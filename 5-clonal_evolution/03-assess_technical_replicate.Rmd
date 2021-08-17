@@ -28,6 +28,8 @@ Here, we will analyze the technical replicate of specific clinical samples. We w
 ```{r}
 library(Seurat)
 library(ggpubr)
+library(harmony)
+library(symphony)
 library(tidyverse)
 ```
 
@@ -36,14 +38,83 @@ library(tidyverse)
 
 ```{r}
 path_to_obj <- here::here("results/R_objects/4.seurat_leukemic.rds")
+path_to_reference_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
+path_to_dea <- here::here("6-differential_expression_analysis/tmp/patient_specific_differential_expression_analysis_rt_vs_cll.rds")
+
+
+# Source functions and variables
+source(here::here("bin/utils.R"))
 ```
 
-#
 
 ## Load data
 
 ```{r}
 seurat <- readRDS(path_to_obj)
+seurat_12_ref <- readRDS(path_to_reference_12)
+dea <- readRDS(path_to_dea)
 ```
 
+
+# Exploratory data analysis
+
+```{r}
+# Split objects by donor and time-point
+seurat <- subset(seurat, subproject == "BCLLATLAS_29")
+seurat_list <- SplitObject(seurat, "donor_id")
+seurat_list <- seurat_list[c("12", "19")]
+seurat_list$`12` <- SplitObject(seurat_list$`12`, "time_point")
+seurat_list$`19` <- SplitObject(seurat_list$`19`, "time_point")
+
+
+# Dimensionality reduction
+seurat_list$`12` <- purrr::map(seurat_list$`12`, process_seurat, dims = 1:20)
+seurat_list$`19`$T1 <- process_seurat(seurat_list$`19`$T1, dims = 1:20)
+
+
+# Visualize
+DimPlot(seurat_list$`12`$T1)
+DimPlot(seurat_list$`12`$T2)
+DimPlot(seurat_list$`19`$T1)
+```
+
+
+Judging by our previous QC and the UMAPs above, we will focus on the T1 of case 12, since it is the only one for which we have enough cells and detected genes, and we can unravel heterogeneity.
+
+Calculate signatures:
+
+```{r}
+# Minimal QC
+seurat <- seurat_list$`12`$T1
+FeaturePlot(seurat, "pct_mt")
+seurat <- subset(seurat, pct_mt < 9)
+seurat <- subset(seurat, nFeature_RNA > 750)
+seurat <- process_seurat(seurat, dims = 1:20)
+DimPlot(seurat)
+FeaturePlot(seurat, "MIR155HG", order = TRUE, pt.size = 1) + scale_color_viridis_c(option = "magma")
+
+
+# Calculate signatures
+dea <- dea$`12`
+dea <- arrange(dea, avg_log2FC)
+cll_signature <- dea$gene[1:250]
+dea <- arrange(dea, desc(avg_log2FC))
+rt_signature <- dea$gene[1:250]
+seurat <- AddModuleScore(
+  seurat,
+  features = list(
+    cll_signature = cll_signature,
+    rt_signature = rt_signature
+  ),
+  name = c("cll_signature", "rt_signature")
+)
+FeaturePlot(seurat, c("cll_signature1", "rt_signature2"), order = TRUE, pt.size = 0.7) &
+  scale_color_viridis_c(option = "magma")
+FeatureScatter(
+  seurat,
+  feature1 = "cll_signature1",
+  feature2 = "rt_signature2",
+  pt.size = 0.7
+)
+```
 
