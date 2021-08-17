@@ -1,7 +1,3 @@
-# This data was inherited from a 2018 project, and we need to do some 
-# data archaeology to have proper metadata
-
-
 # Load packages
 library(tidyverse)
 library(here)
