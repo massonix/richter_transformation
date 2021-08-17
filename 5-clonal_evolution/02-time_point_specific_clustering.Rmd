@@ -1,0 +1,143 @@
+---
+title: 'Time-point-specific clustering'
+author: "Ramon Massoni-Badosa"
+date: "2021/06/07"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will perform patient- and time-point-specific clustering. If we can indeed predict Richter-like cells at the early stages of the disease, then they should cluster together without having the Richter time-point present. On the other hand, if they were poor-quality cells, then they might scatter everywhere in the absence of a Richter-like cluster.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
+path_to_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
+path_to_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
+path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
+path_to_save <- here::here("results/R_objects/7.seurat_time_point_specific_list.rds")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+```
+
+
+## Load data
+
+```{r}
+paths_to_load <- c(
+  "12" = path_to_12,
+  "19" = path_to_19,
+  "63" = path_to_63,
+  "365" = path_to_365,
+  "3299" = path_to_3299
+)
+seurat_list <- purrr::map(paths_to_load, readRDS)
+seurat_list
+umaps_annotations <- purrr::map(names(seurat_list), function(x) {
+  p <- plot_annotation(
+    seurat_list[[x]],
+    pt_size = 0.5,
+    colors_reference = color_annotations,
+    patient_id = x
+  )
+  p +
+    ggtitle(x) +
+    theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
+})
+umaps_annotations
+```
+
+
+# Time point-specific dimensionality reduction
+
+```{r}
+seurat_list_list <- purrr::map(seurat_list, function(seurat_obj) {
+  seurat_obj$time_point2 <- str_c(
+    seurat_obj$time_point,
+    seurat_obj$tissue,
+    sep = "_"
+  )
+  seurat_obj_list <- SplitObject(seurat_obj, split.by = "time_point2")
+  seurat_obj_list <- seurat_obj_list[sort(unique(seurat_obj$time_point2))]
+  seurat_obj_list <- purrr::map(seurat_obj_list, process_seurat, dims = 1:20)
+  seurat_obj_list
+})
+```
+
+
+# Plot
+
+```{r}
+umaps_time_points <- purrr::map2(seurat_list_list, names(seurat_list_list), function(seurat_obj_list, patient_id) {
+  purrr::map2(seurat_obj_list, names(seurat_obj_list), function(seurat_obj, x) {
+    p <- plot_annotation(
+      seurat_obj = seurat_obj,
+      pt_size = 0.65,
+      colors_reference = color_annotations,
+      patient_id = patient_id,
+      nothing = TRUE
+    )
+    p +
+      ggtitle(x) +
+      theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
+  })
+})
+
+print("Case 12")
+umaps_time_points$`12`
+
+print("Case 19")
+umaps_time_points$`19`
+
+print("Case 63")
+umaps_time_points$`63`
+
+print("Case 365")
+umaps_time_points$`365`
+
+print("Case 3299")
+umaps_time_points$`3299`
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat_list_list, path_to_save)
+```
+
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
