@@ -42,9 +42,9 @@ library(tidyverse)
 # Paths
 path_to_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
 path_to_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
-path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
-path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
 path_to_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
+path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
 path_to_save_rds <- here::here("6-differential_expression_analysis/tmp/patient_specific_differential_expression_analysis_rt_vs_cll.rds")
 path_to_save_xlsx <- here::here("results/tables/DEA/patient_specific_differential_expression_analysis_rt_vs_cll.xlsx")
 
@@ -82,13 +82,26 @@ selected_significance_alpha <- alpha
 paths_to_load <- c(
   "12" = path_to_12,
   "19" = path_to_19,
-  "3299" = path_to_3299,
+  "63" = path_to_63,
   "365" = path_to_365,
-  "63" = path_to_63
+  "3299" = path_to_3299
 )
 seurat_list <- purrr::map(paths_to_load, readRDS)
 seurat_list
-purrr::map(seurat_list, DimPlot, cols = color_palette)
+
+
+# Plot
+(umaps_annotations <- purrr::map(names(seurat_list), function(x) {
+  p <- plot_annotation(
+    seurat_list[[x]],
+    pt_size = 0.5,
+    colors_reference = color_annotations,
+    patient_id = x
+  )
+  p +
+    ggtitle(x) +
+    theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
+}))
 ```
 
 
@@ -97,24 +110,24 @@ purrr::map(seurat_list, DimPlot, cols = color_palette)
 ```{r}
 comparisons <- list(
   "12" = list(
-    richter = c("CCND2lo RT-like", "CCND2hi RT-like"),
+    richter = c("CCND2lo RT", "CCND2hi RT"),
     cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi", "MZB1hiIGHMhiXBP1hi")
   ),
   "19" = list(
-    richter = c("MIR155HGhi RT-like", "TP53INP1hi RT-like"),
-    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi CLL-like")
-  ),
-  "3299" = list(
-    richter = "RT-like",
-    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "CD83loMIR155HGhi", "CD83hiMIR155HGhi")
-  ),
-  "365" = list(
-    richter = c("RT-like quiescent", "CXCR4loCD27hi", "MIR155HGhi"),
-    cll = c("CLL-like")
+    richter = c("MIR155HGhi RT", "TP53INP1hi RT"),
+    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi CLL")
   ),
   "63" = list(
-    richter = "RT-like quiescent",
-    cll = "CLL-like"
+    richter = "RT quiescent",
+    cll = "CLL"
+  ),
+  "365" = list(
+    richter = c("RT quiescent", "CXCR4loCD27hi RT", "MIR155HGhi RT"),
+    cll = c("CLL")
+  ),
+  "3299" = list(
+    richter = "RT",
+    cll = c("CXCR4hiCD27lo", "CXCR4loCD27hi", "CD83loMIR155HGhi", "CD83hiMIR155HGhi")
   )
 )
 dea <- purrr::map(names(comparisons), function(x) {
@@ -149,15 +162,15 @@ names(dea) <- names(comparisons)
 upregulated_richter <- purrr::map(dea, function(df) df$gene[df$direction == "up"])
 downregulated_richter <- purrr::map(dea, function(df) df$gene[df$direction == "down"])
 print("DEA patient 12")
-DT::datatable(dea$`12`)
+DT::datatable(dea$`12`, options = list(scrollX = TRUE))
 print("DEA patient 19")
-DT::datatable(dea$`19`)
-print("DEA patient 3299")
-DT::datatable(dea$`3299`)
-print("DEA patient 365")
-DT::datatable(dea$`365`)
+DT::datatable(dea$`19`, options = list(scrollX = TRUE))
 print("DEA patient 63")
-DT::datatable(dea$`63`)
+DT::datatable(dea$`63`, options = list(scrollX = TRUE))
+print("DEA patient 365")
+DT::datatable(dea$`365`, options = list(scrollX = TRUE))
+print("DEA patient 3299")
+DT::datatable(dea$`3299`, options = list(scrollX = TRUE))
 ```
 
 
