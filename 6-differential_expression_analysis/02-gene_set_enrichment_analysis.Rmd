@@ -43,11 +43,12 @@ library(tidyverse)
 # Paths
 path_to_12 <- here::here("results/R_objects/6.seurat_annotated_12.rds")
 path_to_19 <- here::here("results/R_objects/6.seurat_annotated_19.rds")
-path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
-path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
 path_to_63 <- here::here("results/R_objects/patient_63/3.seurat_annotated.rds")
+path_to_365 <- here::here("results/R_objects/6.seurat_annotated_365.rds")
+path_to_3299 <- here::here("results/R_objects/6.seurat_annotated_3299.rds")
 path_to_deg <- here::here("6-differential_expression_analysis/tmp/patient_specific_differential_expression_analysis_rt_vs_cll.rds")
 path_to_save_rds <- here::here("6-differential_expression_analysis/tmp/patient_specific_gsea_rt_vs_cll.rds")
+path_to_save_rds2 <- here::here("6-differential_expression_analysis/tmp/patient_specific_gsea_raw_rt_vs_cll.rds")
 path_to_save_xlsx <- here::here("results/tables/DEA/patient_specific_gsea_rt_vs_cll.xlsx")
 
 
@@ -87,7 +88,20 @@ paths_to_load <- c(
 )
 seurat_list <- purrr::map(paths_to_load, readRDS)
 seurat_list
-purrr::map(seurat_list, DimPlot, cols = color_palette)
+
+
+# Plot
+(umaps_annotations <- purrr::map(names(seurat_list), function(x) {
+  p <- plot_annotation(
+    seurat_list[[x]],
+    pt_size = 0.5,
+    colors_reference = color_annotations,
+    patient_id = x
+  )
+  p +
+    ggtitle(x) +
+    theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
+}))
 
 
 # Load DEG
@@ -99,6 +113,7 @@ dea <- readRDS(path_to_deg)
 
 ```{r}
 set.seed(1234)
+dea <- dea[names(seurat_list)]
 gsea_patient_specific <- purrr::map(dea, function(df) {
   gene_list <- df$avg_log2FC
   names(gene_list) <- df$gene
@@ -123,11 +138,11 @@ gsea_sorted <- purrr::map(gsea_patient_specific, function(x) {
     dplyr::arrange(desc(NES))
   df
 })
-DT::datatable(gsea_sorted$`12`)
-DT::datatable(gsea_sorted$`19`)
-DT::datatable(gsea_sorted$`3299`)
-DT::datatable(gsea_sorted$`365`)
-DT::datatable(gsea_sorted$`63`)
+DT::datatable(gsea_sorted$`12`, options = list(scrollX = TRUE))
+DT::datatable(gsea_sorted$`19`, options = list(scrollX = TRUE))
+DT::datatable(gsea_sorted$`63`, options = list(scrollX = TRUE))
+DT::datatable(gsea_sorted$`365`, options = list(scrollX = TRUE))
+DT::datatable(gsea_sorted$`3299`, options = list(scrollX = TRUE))
 
 
 # Plot
@@ -170,8 +185,8 @@ As we can see, patients 12, 63 and 365 share a great deal of enriched GO terms:
 ```{r}
 go_terms <- list(
   "12" = gsea_sorted$`12`$Description[gsea_sorted$`12`$NES > 0],
-  "365" = gsea_sorted$`365`$Description[gsea_sorted$`365`$NES > 0],
-  "63" = gsea_sorted$`63`$Description[gsea_sorted$`63`$NES > 0]
+  "63" = gsea_sorted$`63`$Description[gsea_sorted$`63`$NES > 0],
+  "365" = gsea_sorted$`365`$Description[gsea_sorted$`365`$NES > 0]
 )
 common_terms <- Reduce(intersect, go_terms)
 common_terms
@@ -339,6 +354,7 @@ FeaturePlot(
 
 ```{r}
 saveRDS(gsea_sorted, path_to_save_rds)
+saveRDS(gsea_patient_specific, path_to_save_rds2)
 openxlsx::write.xlsx(gsea_sorted, path_to_save_xlsx)
 ```
 
