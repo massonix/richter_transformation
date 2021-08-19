@@ -2,102 +2,102 @@ Case;Time point;Description;Subproject;Annotation;Num of cells passing filters
 12;T1;pretreatment;BCLLATLAS_10;CXCR4hiCD27lo;201
 12;T1;pretreatment;BCLLATLAS_10;CXCR4loCD27hi;34
 12;T1;pretreatment;BCLLATLAS_10;MIR155HGhi;8
-12;T1;pretreatment;BCLLATLAS_10;CCND2lo RT-like;2
-12;T1;pretreatment;BCLLATLAS_10;CCND2hi RT-like;0
-12;T1;pretreatment;BCLLATLAS_10;RT-like proliferative;0
+12;T1;pretreatment;BCLLATLAS_10;CCND2lo RT;2
+12;T1;pretreatment;BCLLATLAS_10;CCND2hi RT;0
+12;T1;pretreatment;BCLLATLAS_10;RT proliferative;0
 12;T1;pretreatment;BCLLATLAS_10;MZB1hiIGHMhiXBP1hi;0
 12;T2;pretreatment_progression;BCLLATLAS_10;CXCR4hiCD27lo;46
 12;T2;pretreatment_progression;BCLLATLAS_10;CXCR4loCD27hi;15
 12;T2;pretreatment_progression;BCLLATLAS_10;MIR155HGhi;0
-12;T2;pretreatment_progression;BCLLATLAS_10;CCND2lo RT-like;2
-12;T2;pretreatment_progression;BCLLATLAS_10;CCND2hi RT-like;1
-12;T2;pretreatment_progression;BCLLATLAS_10;RT-like proliferative;1
+12;T2;pretreatment_progression;BCLLATLAS_10;CCND2lo RT;2
+12;T2;pretreatment_progression;BCLLATLAS_10;CCND2hi RT;1
+12;T2;pretreatment_progression;BCLLATLAS_10;RT proliferative;1
 12;T2;pretreatment_progression;BCLLATLAS_10;MZB1hiIGHMhiXBP1hi;0
 12;T4;posttreatment_2;BCLLATLAS_10;CXCR4hiCD27lo;844
 12;T4;posttreatment_2;BCLLATLAS_10;CXCR4loCD27hi;671
 12;T4;posttreatment_2;BCLLATLAS_10;MIR155HGhi;80
-12;T4;posttreatment_2;BCLLATLAS_10;CCND2lo RT-like;1
-12;T4;posttreatment_2;BCLLATLAS_10;CCND2hi RT-like;3
-12;T4;posttreatment_2;BCLLATLAS_10;RT-like proliferative;8
+12;T4;posttreatment_2;BCLLATLAS_10;CCND2lo RT;1
+12;T4;posttreatment_2;BCLLATLAS_10;CCND2hi RT;3
+12;T4;posttreatment_2;BCLLATLAS_10;RT proliferative;8
 12;T4;posttreatment_2;BCLLATLAS_10;MZB1hiIGHMhiXBP1hi;19
 12;T5;posttreatment_3;BCLLATLAS_10;CXCR4hiCD27lo;1291
 12;T5;posttreatment_3;BCLLATLAS_10;CXCR4loCD27hi;1059
 12;T5;posttreatment_3;BCLLATLAS_10;MIR155HGhi;115
-12;T5;posttreatment_3;BCLLATLAS_10;CCND2lo RT-like;10
-12;T5;posttreatment_3;BCLLATLAS_10;CCND2hi RT-like;1
-12;T5;posttreatment_3;BCLLATLAS_10;RT-like proliferative;2
+12;T5;posttreatment_3;BCLLATLAS_10;CCND2lo RT;10
+12;T5;posttreatment_3;BCLLATLAS_10;CCND2hi RT;1
+12;T5;posttreatment_3;BCLLATLAS_10;RT proliferative;2
 12;T5;posttreatment_3;BCLLATLAS_10;MZB1hiIGHMhiXBP1hi;51
 12;T6;RS;BCLLATLAS_10;CXCR4hiCD27lo;432
 12;T6;RS;BCLLATLAS_10;CXCR4loCD27hi;9
 12;T6;RS;BCLLATLAS_10;MIR155HGhi;2
-12;T6;RS;BCLLATLAS_10;CCND2lo RT-like;251
-12;T6;RS;BCLLATLAS_10;CCND2hi RT-like;389
-12;T6;RS;BCLLATLAS_10;RT-like proliferative;237
+12;T6;RS;BCLLATLAS_10;CCND2lo RT;251
+12;T6;RS;BCLLATLAS_10;CCND2hi RT;389
+12;T6;RS;BCLLATLAS_10;RT proliferative;237
 12;T6;RS;BCLLATLAS_10;MZB1hiIGHMhiXBP1hi;0
 19;T1;pretreatment;BCLLATLAS_10;CXCR4hiCD27lo;186
 19;T1;pretreatment;BCLLATLAS_10;CXCR4loCD27hi;62
-19;T1;pretreatment;BCLLATLAS_10;MIR155HGhi CLL-like;7
-19;T1;pretreatment;BCLLATLAS_10;MIR155HGhi RT-like;6
-19;T1;pretreatment;BCLLATLAS_10;TP53INP1hi RT-like;68
-19;T1;pretreatment;BCLLATLAS_10;RT-like proliferative;1
+19;T1;pretreatment;BCLLATLAS_10;MIR155HGhi CLL;7
+19;T1;pretreatment;BCLLATLAS_10;MIR155HGhi RT;6
+19;T1;pretreatment;BCLLATLAS_10;TP53INP1hi RT;68
+19;T1;pretreatment;BCLLATLAS_10;RT proliferative;1
 19;T3;posttreatment;BCLLATLAS_10;CXCR4hiCD27lo;1333
 19;T3;posttreatment;BCLLATLAS_10;CXCR4loCD27hi;1346
-19;T3;posttreatment;BCLLATLAS_10;MIR155HGhi CLL-like;66
-19;T3;posttreatment;BCLLATLAS_10;MIR155HGhi RT-like;7
-19;T3;posttreatment;BCLLATLAS_10;TP53INP1hi RT-like;45
-19;T3;posttreatment;BCLLATLAS_10;RT-like proliferative;3
+19;T3;posttreatment;BCLLATLAS_10;MIR155HGhi CLL;66
+19;T3;posttreatment;BCLLATLAS_10;MIR155HGhi RT;7
+19;T3;posttreatment;BCLLATLAS_10;TP53INP1hi RT;45
+19;T3;posttreatment;BCLLATLAS_10;RT proliferative;3
 19;T4;posttreatment_2;BCLLATLAS_10;CXCR4hiCD27lo;788
 19;T4;posttreatment_2;BCLLATLAS_10;CXCR4loCD27hi;493
-19;T4;posttreatment_2;BCLLATLAS_10;MIR155HGhi CLL-like;44
-19;T4;posttreatment_2;BCLLATLAS_10;MIR155HGhi RT-like;9
-19;T4;posttreatment_2;BCLLATLAS_10;TP53INP1hi RT-like;31
-19;T4;posttreatment_2;BCLLATLAS_10;RT-like proliferative;3
+19;T4;posttreatment_2;BCLLATLAS_10;MIR155HGhi CLL;44
+19;T4;posttreatment_2;BCLLATLAS_10;MIR155HGhi RT;9
+19;T4;posttreatment_2;BCLLATLAS_10;TP53INP1hi RT;31
+19;T4;posttreatment_2;BCLLATLAS_10;RT proliferative;3
 19;T5;posttreatment_3;BCLLATLAS_10;CXCR4hiCD27lo;407
 19;T5;posttreatment_3;BCLLATLAS_10;CXCR4loCD27hi;466
-19;T5;posttreatment_3;BCLLATLAS_10;MIR155HGhi CLL-like;35
-19;T5;posttreatment_3;BCLLATLAS_10;MIR155HGhi RT-like;9
-19;T5;posttreatment_3;BCLLATLAS_10;TP53INP1hi RT-like;37
-19;T5;posttreatment_3;BCLLATLAS_10;RT-like proliferative;1
+19;T5;posttreatment_3;BCLLATLAS_10;MIR155HGhi CLL;35
+19;T5;posttreatment_3;BCLLATLAS_10;MIR155HGhi RT;9
+19;T5;posttreatment_3;BCLLATLAS_10;TP53INP1hi RT;37
+19;T5;posttreatment_3;BCLLATLAS_10;RT proliferative;1
 19;T6;RS;BCLLATLAS_10;CXCR4hiCD27lo;11
 19;T6;RS;BCLLATLAS_10;CXCR4loCD27hi;2
-19;T6;RS;BCLLATLAS_10;MIR155HGhi CLL-like;3
-19;T6;RS;BCLLATLAS_10;MIR155HGhi RT-like;300
-19;T6;RS;BCLLATLAS_10;TP53INP1hi RT-like;1463
-19;T6;RS;BCLLATLAS_10;RT-like proliferative;52
-365;T2;posttreatment;BCLLATLAS_29;CLL-like;4119
-365;T2;posttreatment;BCLLATLAS_29;CXCR4loCD27hi;0
-365;T2;posttreatment;BCLLATLAS_29;MIR155HGhi;0
-365;T2;posttreatment;BCLLATLAS_29;RT-like quiescent;0
-365;T2;posttreatment;BCLLATLAS_29;RT-like proliferative;0
-365;T3;RS;BCLLATLAS_29;CLL-like;4
-365;T3;RS;BCLLATLAS_29;CXCR4loCD27hi;267
-365;T3;RS;BCLLATLAS_29;MIR155HGhi;130
-365;T3;RS;BCLLATLAS_29;RT-like quiescent;111
-365;T3;RS;BCLLATLAS_29;RT-like proliferative;54
+19;T6;RS;BCLLATLAS_10;MIR155HGhi CLL;3
+19;T6;RS;BCLLATLAS_10;MIR155HGhi RT;300
+19;T6;RS;BCLLATLAS_10;TP53INP1hi RT;1463
+19;T6;RS;BCLLATLAS_10;RT proliferative;52
+63;T1;pretreatment;CLL_52;CLL;247
+63;T1;pretreatment;CLL_52;RT quiescent;3
+63;T1;pretreatment;CLL_52;RT proliferative;0
+63;T1;pretreatmnt_2ndTissue;CLL_52;CLL;264
+63;T1;pretreatmnt_2ndTissue;CLL_52;RT quiescent;4
+63;T1;pretreatmnt_2ndTissue;CLL_52;RT proliferative;0
+63;T2;posttreatment;CLL_52;CLL;246
+63;T2;posttreatment;CLL_52;RT quiescent;6
+63;T2;posttreatment;CLL_52;RT proliferative;1
+63;T3;RS;CLL_52;CLL;3
+63;T3;RS;CLL_52;RT quiescent;203
+63;T3;RS;CLL_52;RT proliferative;6
+365;T2;posttreatment;BCLLATLAS_29;CLL;4119
+365;T2;posttreatment;BCLLATLAS_29;CXCR4loCD27hi RT;0
+365;T2;posttreatment;BCLLATLAS_29;MIR155HGhi RT;0
+365;T2;posttreatment;BCLLATLAS_29;RT quiescent;0
+365;T2;posttreatment;BCLLATLAS_29;RT proliferative;0
+365;T3;RS;BCLLATLAS_29;CLL;4
+365;T3;RS;BCLLATLAS_29;CXCR4loCD27hi RT;267
+365;T3;RS;BCLLATLAS_29;MIR155HGhi RT;130
+365;T3;RS;BCLLATLAS_29;RT quiescent;111
+365;T3;RS;BCLLATLAS_29;RT proliferative;54
 3299;T1;posttreatment;BCLLATLAS_10;CXCR4hiCD27lo;2695
 3299;T1;posttreatment;BCLLATLAS_10;CXCR4loCD27hi;1192
 3299;T1;posttreatment;BCLLATLAS_10;CD83loMIR155HGhi;261
 3299;T1;posttreatment;BCLLATLAS_10;CD83hiMIR155HGhi;91
-3299;T1;posttreatment;BCLLATLAS_10;RT-like;7
+3299;T1;posttreatment;BCLLATLAS_10;RT;7
 3299;T2;posttreatment_2;BCLLATLAS_10;CXCR4hiCD27lo;36
 3299;T2;posttreatment_2;BCLLATLAS_10;CXCR4loCD27hi;8
 3299;T2;posttreatment_2;BCLLATLAS_10;CD83loMIR155HGhi;7
 3299;T2;posttreatment_2;BCLLATLAS_10;CD83hiMIR155HGhi;0
-3299;T2;posttreatment_2;BCLLATLAS_10;RT-like;1125
+3299;T2;posttreatment_2;BCLLATLAS_10;RT;1125
 3299;T3;posttreatment_3;BCLLATLAS_10;CXCR4hiCD27lo;3
 3299;T3;posttreatment_3;BCLLATLAS_10;CXCR4loCD27hi;4
 3299;T3;posttreatment_3;BCLLATLAS_10;CD83loMIR155HGhi;4
 3299;T3;posttreatment_3;BCLLATLAS_10;CD83hiMIR155HGhi;0
-3299;T3;posttreatment_3;BCLLATLAS_10;RT-like;630
-63;T1;pretreatment;CLL_52;CLL-like;247
-63;T1;pretreatment;CLL_52;RT-like quiescent;3
-63;T1;pretreatment;CLL_52;RT-like proliferative;0
-63;T1;pretreatmnt_2ndTissue;CLL_52;CLL-like;264
-63;T1;pretreatmnt_2ndTissue;CLL_52;RT-like quiescent;4
-63;T1;pretreatmnt_2ndTissue;CLL_52;RT-like proliferative;0
-63;T2;posttreatment;CLL_52;CLL-like;246
-63;T2;posttreatment;CLL_52;RT-like quiescent;6
-63;T2;posttreatment;CLL_52;RT-like proliferative;1
-63;T3;RS;CLL_52;CLL-like;3
-63;T3;RS;CLL_52;RT-like quiescent;203
-63;T3;RS;CLL_52;RT-like proliferative;6
+3299;T3;posttreatment_3;BCLLATLAS_10;RT;630
