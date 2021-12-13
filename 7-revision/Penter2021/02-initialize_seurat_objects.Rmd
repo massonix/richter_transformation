@@ -1,0 +1,136 @@
+---
+title: 'Initialize Seurat Object'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here we will reanalyze the dataset from [Penter et al.](https://cancerdiscovery.aacrjournals.org/content/11/12/3048).
+
+
+# Pre-processing
+
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(GEOquery)
+library(tidyverse)
+library(Matrix)
+library(glue)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_data <- "~/Desktop/richter_transformation/data"
+path_to_save <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_init_Penter2021.rds"
+
+# Source functions
+# source(here::here("bin/utils.R"))
+source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
+```
+
+
+## Load data
+
+Let us load the data and create a Seurat object per sample: 
+
+```{r}
+dirs <- path_to_data %>%
+  list.dirs(full.names = FALSE) %>%
+  str_subset("GSM")
+seurat_list <- purrr::map(dirs, function(x) {
+  files <- list.files(glue("{path_to_data}/{x}"), full.names = TRUE)
+  mat_path <- str_subset(files, "matrix")
+  features_path <- str_subset(files, "features")
+  barcodes_path <- str_subset(files, "barcodes")
+  mat <- readMM(mat_path)
+  features <- read_tsv(features_path, col_names = FALSE)
+  barcodes <- read_tsv(barcodes_path, col_names = FALSE)
+  rownames(mat) <- features[[2]]
+  colnames(mat) <- barcodes[[1]]
+  seurat_obj <- CreateSeuratObject(counts = mat)
+  seurat_obj$dataset_id <- x
+  seurat_obj <- RenameCells(
+    seurat_obj,
+    new.names = str_c(x, colnames(seurat_obj), sep = "_")
+  )
+  seurat_obj
+})
+names(seurat_list) <- dirs
+```
+
+
+We will now merge the objects and include relevant metadata
+
+```{r}
+# Add metadata
+gse <- getGEO("GSE165087", GSEMatrix = FALSE)
+gsm_list <- GSMList(gse)
+seurat_list <- purrr::map(dirs, function(x) {
+  seurat_obj <- seurat_list[[x]]
+  gsm <- gsm_list[[x]]@header
+  seurat_obj$sample_id <- gsm$title
+  seurat_obj$sample_description <- gsm$source_name_ch1
+  seurat_obj$technology <- gsm$description
+  seurat_obj$tissue <- gsm$characteristics_ch1 %>%
+    str_subset("tissue") %>%
+    str_remove("tissue: ")
+  seurat_obj$disease_state <- gsm$characteristics_ch1 %>%
+    str_subset("disease state") %>%
+    str_remove("disease state: ")
+  seurat_obj$wbc <- gsm$characteristics_ch1 %>%
+    str_subset("wbc") %>%
+    str_remove("wbc: ")
+  tumor_purity <- gsm$characteristics_ch1 %>%
+    str_subset("cd19+") %>%
+    str_split(":")
+  seurat_obj$tumor_purity <- str_remove(tumor_purity[[1]][2], "^ ")
+  seurat_obj$time <- gsm$characteristics_ch1 %>%
+    str_subset("time") %>%
+    str_remove("time: ") 
+  seurat_obj
+})
+names(seurat_list) <- dirs
+
+
+# Merge
+seurat <- seurat_list[[1]]
+for (i in 2:length(seurat_list)) {
+  print(names(seurat_list)[i])
+  seurat <- merge(x = seurat, y = seurat_list[[i]])
+  seurat_list[[i]] <- NA
+}
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat, path_to_save)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+

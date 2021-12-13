@@ -1,0 +1,149 @@
+---
+title: 'Quality Control'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+We will try to replicate their quality control (QC). Based on the methods section: 
+
+"Low quality cells were excluded from downstream analyses based on %mitochondrial reads <20, features per cell >200 and <2,500, and number of reads per cell <10,000."
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(ggpubr)
+library(Matrix)
+library(glue)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_data <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_init_Penter2021.rds"
+path_to_save <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_filtered_Penter2021.rds"
+
+
+# Source functions
+# source(here::here("bin/utils.R"))
+source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
+
+
+# Parameters
+max_n_counts <- 10000
+min_n_genes <- 200
+max_n_genes <- 2500
+max_pct_mt <- 20
+n_counts_titl <- "Library Size (total UMI)"
+n_genes_titl <- "Number of detected genes"
+pct_mt_titl <- "% mitochondrial expression"
+n_counts_var <- "nCount_RNA"
+n_genes_var <- "nFeature_RNA"
+pct_mt_var <- "pct_mt"
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_data)
+```
+
+
+# QC
+
+## Library size (total UMI)
+
+```{r}
+plot_histogram_qc(seurat@meta.data, x = n_counts_var, x_lab = n_counts_titl) +
+  geom_vline(xintercept = max_n_counts, linetype = "dashed", color = "red")
+```
+
+
+## Number of detected genes
+
+```{r}
+plot_histogram_qc(seurat@meta.data, x = n_genes_var, x_lab = n_genes_titl) +
+  geom_vline(xintercept = min_n_genes, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = max_n_genes, linetype = "dashed", color = "red")
+```
+
+
+## % mitochondrial expression
+
+```{r}
+seurat[[pct_mt_var]] <- PercentageFeatureSet(seurat, pattern = "^MT-")
+plot_histogram_qc(seurat@meta.data, x = pct_mt_var, x_lab = pct_mt_titl) +
+  geom_vline(xintercept = max_pct_mt, linetype = "dashed", color = "red")
+```
+
+
+## Joint
+
+```{r}
+# % mitochondrial vs number of detected genes
+FeatureScatter(seurat, n_genes_var, pct_mt_var, cols = "black") +
+  labs(title = "", x = n_genes_titl, y = pct_mt_titl) +
+  NoLegend() +
+  geom_vline(xintercept = min_n_genes, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = max_n_genes, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = max_pct_mt, linetype = "dashed", color = "red")
+
+
+# number of detected genes vs library size
+FeatureScatter(seurat, n_counts_var, n_genes_var, cols = "black") +
+  labs(title = "", x = n_counts_titl, y = n_genes_titl) +
+  NoLegend() +
+  geom_vline(xintercept = max_n_counts, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = min_n_genes, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = max_n_genes, linetype = "dashed", color = "red")
+```
+
+
+# Filter
+
+```{r}
+is_low_quality <- with(seurat@meta.data,
+  nCount_RNA > max_n_counts |
+  nFeature_RNA < min_n_genes |
+  nFeature_RNA > max_n_genes |
+  pct_mt > max_pct_mt
+)
+table(is_low_quality)
+seurat <- subset(seurat, cells = colnames(seurat)[!is_low_quality])
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat, path_to_save)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+
