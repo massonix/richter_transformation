@@ -40,13 +40,15 @@ library(glue)
 
 ```{r}
 # Paths
-path_to_data <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_init_Penter2021.rds"
-path_to_save <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_filtered_Penter2021.rds"
+# path_to_data <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_init_Penter2021.rds"
+# path_to_save <- "~/Desktop/richter_transformation/results/R_objects/2.seurat_obj_filtered_Penter2021.rds"
+path_to_data <- here::here("results/R_objects/Penter2021/1.seurat_obj_init_Penter2021.rds")
+path_to_save <- here::here("results/R_objects/Penter2021/2.seurat_obj_filtered_Penter2021.rds")
 
 
 # Source functions
-# source(here::here("bin/utils.R"))
-source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
+source(here::here("bin/utils.R"))
+# source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
 
 
 # Parameters

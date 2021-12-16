@@ -39,12 +39,15 @@ library(glue)
 
 ```{r}
 # Paths
-path_to_data <- "~/Desktop/richter_transformation/data"
-path_to_save <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_init_Penter2021.rds"
+path_to_data <- here::here("data/Penter2021/")
+path_to_save <- here::here("results/R_objects/Penter2021/1.seurat_obj_init_Penter2021.rds")
+# path_to_data <- "~/Desktop/richter_transformation/data"
+# path_to_save <- "~/Desktop/richter_transformation/results/R_objects/1.seurat_obj_init_Penter2021.rds"
+
 
 # Source functions
-# source(here::here("bin/utils.R"))
-source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
+source(here::here("bin/utils.R"))
+# source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
 ```
 
 
@@ -82,7 +85,8 @@ We will now merge the objects and include relevant metadata
 
 ```{r}
 # Add metadata
-gse <- getGEO("GSE165087", GSEMatrix = FALSE)
+# gse <- getGEO("GSE165087", GSEMatrix = FALSE)
+gse <- readRDS(here::here("results/R_objects/gse_obj.rds"))
 gsm_list <- GSMList(gse)
 seurat_list <- purrr::map(dirs, function(x) {
   seurat_obj <- seurat_list[[x]]

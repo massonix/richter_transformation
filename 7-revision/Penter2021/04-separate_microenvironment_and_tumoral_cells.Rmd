@@ -1,0 +1,173 @@
+---
+title: 'Separate microenvironment and tumoral cells'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here we will separate the tumoral from the microenvironment cells. To that end, we will perform linear dimensionality reduction (PCA), which we will use to cluster cells.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(harmony)
+library(tidyverse)
+library(ggpubr)
+library(glue)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+# path_to_data <- "~/Desktop/richter_transformation/results/R_objects/2.seurat_obj_filtered_Penter2021.rds"
+# path_to_save <- "~/Desktop/richter_transformation/results/R_objects/3.seurat_obj_clustered_Penter2021.rds"
+path_to_data <- here::here("results/R_objects/Penter2021/2.seurat_obj_filtered_Penter2021.rds")
+path_to_save <- here::here("results/R_objects/Penter2021/3.seurat_obj_clustered_Penter2021.rds")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+# source("~/Desktop/CNAG/mnt_clust/RICHTER/current/bin/utils.R")
+
+
+# Colors
+color_palette <-  c("#1CFFCE", "#90AD1C", "#C075A6", "#85660D", "#5A5156", "#AA0DFE",   
+                    "#F8A19F", "#F7E1A0", "#1C8356", "#FEAF16", "#822E1C", "#C4451C",   
+                    "#1CBE4F", "#325A9B", "#F6222E", "#FE00FA", "#FBE426", "#16FF32", 
+                    "black",   "#3283FE", "#B00068", "#DEA0FD", "#B10DA1", "#E4E1E3",   
+                    "#90AD1C", "#FE00FA", "#85660D", "#3B00FB", "#822E1C", "coral2", 
+                    "#1CFFCE", "#1CBE4F", "#3283FE", "#FBE426", "#F7E1A0", "#325A9B",   
+                    "#2ED9FF", "#B5EFB5", "#5A5156", "#DEA0FD", "#FEAF16", "#683B79",   
+                    "#B10DA1", "#1C7F93", "#F8A19F", "dark orange", "#FEAF16", "#FBE426",  
+                    "Brown")
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_data)
+```
+
+
+# Dimensionality reduction
+
+```{r}
+seurat <- NormalizeData(seurat)
+seurat <- process_seurat(seurat)
+DimPlot(
+  seurat,
+  group.by = "sample_id",
+  pt.size = 0.1
+) +
+  scale_color_manual(values = color_palette)
+FeaturePlot(seurat, c("CD3D", "CD79A", "LYZ", "NKG7"))
+FeaturePlot(seurat, c("HBB", "TOP2A", "PPBP"))
+FeaturePlot(seurat, "TCF4")
+```
+
+
+# Batch effect correction
+
+```{r}
+seurat <- RunHarmony(
+  seurat,
+  group.by.vars = "dataset_id",
+  dims = 1:30,
+  reduction = "pca"
+)
+seurat <- RunUMAP(seurat, dims = 1:30, reduction = "harmony")
+FeaturePlot(seurat, c("CD3D", "CD79A", "LYZ", "NKG7"))
+FeaturePlot(seurat, c("HBB", "TOP2A", "PPBP"))
+FeaturePlot(seurat, "TCF4")
+```
+
+
+# Cluster
+
+```{r}
+seurat <- FindNeighbors(seurat, reduction = "harmony", dims = 1:30)
+seurat <- FindClusters(seurat, resolution = 0.05)
+DimPlot(
+  seurat,
+  group.by = "sample_id",
+  pt.size = 0.1
+) +
+  scale_color_manual(values = color_palette)
+FeaturePlot(seurat, c("CD3D", "CD79A", "LYZ", "NKG7"))
+FeaturePlot(seurat, c("HBB", "TOP2A", "PPBP"))
+FeaturePlot(seurat, "TCF4")
+```
+
+
+# Markers
+
+```{r}
+markers_all <- FindAllMarkers(seurat, logfc.threshold = 1, only.pos = TRUE)
+DT::datatable(markers_all, options = list(scrollX = TRUE))
+```
+
+
+* Cluster 0: CLL cells
+* Cluster 1: CD4 T cells/CD8 T cells/NK
+* Cluster 2: myeloid (monocytes/DC)
+* Cluster 3: platelets
+* Cluster 4: erythrocytes
+* Cluster 5: doublets
+* Cluster 6: unknown
+* Cluster 7: technical
+* Cluster 8: unknown
+
+
+Since the focus of this study is in the CD5+CD19+ B cells, we will subset and save cluster 0:
+
+```{r}
+seurat <- subset(seurat, idents = "0")
+```
+
+
+Reprocess
+
+```{r}
+seurat <- process_seurat(seurat)
+DimPlot(
+  seurat,
+  group.by = "sample_id",
+  pt.size = 0.1
+) +
+  scale_color_manual(values = color_palette)
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat, path_to_save)
+```
+
+
+# Session information
+
+```{r}
+sessionInfo()
+```
+
