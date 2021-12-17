@@ -1,0 +1,145 @@
+---
+title: 'Differential expression analysis (Penter 2021): RT vs CLL'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we will perform a differential expression analysis (DEA) between Richter transformation (RT) and chronic lymphocytic leukemia (CLL) using the scRNA-seq from [Penter et al.](https://cancerdiscovery.aacrjournals.org/content/11/12/3048).
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(ggrepel)
+library(ggforce)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/Penter2021/3.seurat_obj_clustered_Penter2021.rds")
+path_to_save <- here::here("results/R_objects/Penter2021/dea_RT_vs_CLL_Penter2021.rds")
+path_to_save_xlsx <- here::here("results/tables/DEA/dea_RT_vs_CLL_Penter2021.xlsx")
+
+
+# Colors
+color_palette <-  c("#1CFFCE", "#90AD1C", "#C075A6", "#85660D", "#5A5156", "#AA0DFE",   
+                    "#F8A19F", "#F7E1A0", "#1C8356", "#FEAF16", "#822E1C", "#C4451C",   
+                    "#1CBE4F", "#325A9B", "#F6222E", "#FE00FA", "#FBE426", "#16FF32", 
+                    "black",   "#3283FE", "#B00068", "#DEA0FD", "#B10DA1", "#E4E1E3",   
+                    "#90AD1C", "#FE00FA", "#85660D", "#3B00FB", "#822E1C", "coral2", 
+                    "#1CFFCE", "#1CBE4F", "#3283FE", "#FBE426", "#F7E1A0", "#325A9B",   
+                    "#2ED9FF", "#B5EFB5", "#5A5156", "#DEA0FD", "#FEAF16", "#683B79",   
+                    "#B10DA1", "#1C7F93", "#F8A19F", "dark orange", "#FEAF16", "#FBE426",  
+                    "Brown")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+alpha <- 0.05
+min_avg_log2FC <- 0.25
+selected_avg_log2FC <- 1.25
+selected_pct_cells <- 10
+selected_significance_alpha <- alpha
+```
+
+
+## Load data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+
+
+# Plot
+DimPlot(
+  seurat,
+  group.by = "sample_id",
+  pt.size = 0.1,
+  cols = color_palette
+)
+DimPlot(
+  seurat,
+  group.by = "disease_state",
+  pt.size = 0.1,
+  cols = c("#dcdddc", "#cd8899")
+)
+```
+
+
+# Differential expression analysis
+
+```{r}
+Idents(seurat) <- "disease_state"
+dea <- FindMarkers(
+  seurat,
+  ident.1 = "CLL Richter's transformation",
+  ident.2 = "CLL active disease",
+  only.pos = FALSE,
+  logfc.threshold = 0
+)
+dea <- dea %>%
+  rownames_to_column("gene") %>%
+  arrange(desc(avg_log2FC))
+dea$direction <- case_when(
+  dea$p_val_adj < alpha & dea$avg_log2FC > min_avg_log2FC ~ "up",
+  dea$p_val_adj < alpha & dea$avg_log2FC < 0 & abs(dea$avg_log2FC) > min_avg_log2FC ~ "down",
+  TRUE ~ "not sig."
+)
+pct_cells <- Matrix::rowMeans(seurat[["RNA"]]@counts > 0) * 100
+dea$pct_cells_expressing <- pct_cells[dea$gene]
+
+
+# Inspect table
+DT::datatable(dea, options = list(scrollX = TRUE))
+```
+
+
+# MA plot
+
+```{r}
+ma_gg <- ma_plot(
+  dea,
+  selected_avg_log2FC = selected_avg_log2FC,
+  selected_pct_cells = selected_pct_cells,
+  selected_significance_alpha = selected_significance_alpha
+)
+ma_gg
+```
+
+
+# Save
+
+```{r}
+saveRDS(dea, path_to_save)
+openxlsx::write.xlsx(dea, path_to_save_xlsx)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
