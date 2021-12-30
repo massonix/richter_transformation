@@ -18,7 +18,7 @@ macs_path <- "/Users/rmassoni/opt/miniconda3/bin/macs2"
 path_to_gse <- "/Users/rmassoni/Desktop/richter_transformation/data/scATAC/gse_atac_obj.rds"
 # path_to_gse <- here::here("results/R_objects/gse_atac_obj.rds")
 n_barcodes <- 30000
-
+# n_barcodes <- 900
 
 # Call cells
 gsm_dirs <- frag_path %>%
@@ -113,40 +113,45 @@ chrom_assay <- CreateChromatinAssay(
   min.features = 200
 )
 seurat_obj <- CreateSeuratObject(counts = chrom_assay, assay = "ATAC")
-
+# saveRDS(seurat_obj, "~/Desktop/richter_transformation/results/R_objects/seurat_atac.rds")
 
 # Add metadata
 seurat_obj$dataset_id <- str_sub(colnames(seurat_obj), start = 1, end = 10)
+seurat_obj$cell_barcode <- colnames(seurat_obj)
 gse <- readRDS(path_to_gse)
 gsm_list <- GSMList(gse)
 gsm_list <- gsm_list[unique(seurat_obj$dataset_id)]
+metadata_list <- purrr::map(gsm_list, function(x) {
+  gsm <- x@header
+  df <- data.frame(
+    dataset_id = gsm$geo_accession,
+    library_strategy = gsm$library_strategy,
+    sample_description = gsm$title
+  )
+  df$tissue <- gsm$characteristics_ch1 %>%
+    str_subset("tissue") %>%
+    str_remove("tissue: ")
+  df$wbc <- gsm$characteristics_ch1 %>%
+    str_subset("wbc") %>%
+    str_remove("wbc: ") %>%
+    as.numeric()
+  df$disease_state <- gsm$characteristics_ch1 %>%
+    str_subset("disease state") %>%
+    str_remove("disease state: ")
+  tumor_purity <- gsm$characteristics_ch1 %>%
+    str_subset("cd19+") %>%
+    str_split(":")
+  df$tumor_purity <- as.numeric(str_remove(tumor_purity[[1]][2], "^ "))
+  df
+})
+metadata_df <- bind_rows(metadata_list)
+new_metadata <- left_join(seurat_obj@meta.data, metadata_df, by = "dataset_id")
+rownames(new_metadata) <- new_metadata$cell_barcode
+seurat_obj@meta.data <- new_metadata
 
-
-gsm <- gsm_list[[x]]@header
-seurat_obj$sample_id <- gsm$title
-seurat_obj$sample_description <- gsm$source_name_ch1
-seurat_obj$technology <- gsm$description
-seurat_obj$tissue <- gsm$characteristics_ch1 %>%
-  str_subset("tissue") %>%
-  str_remove("tissue: ")
-seurat_obj$disease_state <- gsm$characteristics_ch1 %>%
-  str_subset("disease state") %>%
-  str_remove("disease state: ")
-seurat_obj$wbc <- gsm$characteristics_ch1 %>%
-  str_subset("wbc") %>%
-  str_remove("wbc: ")
-tumor_purity <- gsm$characteristics_ch1 %>%
-  str_subset("cd19+") %>%
-  str_split(":")
-seurat_obj$tumor_purity <- str_remove(tumor_purity[[1]][2], "^ ")
-seurat_obj$time <- gsm$characteristics_ch1 %>%
-  str_subset("time") %>%
-  str_remove("time: ") 
-seurat_obj
 
 # Save
 saveRDS(seurat_obj, path_to_save)
-
 
 
 
