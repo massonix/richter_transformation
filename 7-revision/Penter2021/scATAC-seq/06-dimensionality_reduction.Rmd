@@ -1,0 +1,85 @@
+---
+title: 'Dimensionality Reduction (scATAC-seq)'
+author: "Ramon Massoni-Badosa"
+date: "2021/04/09"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here we will run the standard [Signac pipeline](https://satijalab.org/signac/articles/pbmc_vignette.html) that will allow us to cluster cells and visualize them in UMAP space.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(GenomicRanges)
+library(GEOquery)
+library(tidyverse)
+library(glue)
+```
+
+
+## Define parameters
+
+```{r}
+path_to_obj <- here::here("results/R_objects/Penter2021/scATAC-seq/1.seurat_obj_init_Penter2021_atac.rds")
+path_to_save <- here::here("results/R_objects/Penter2021/scATAC-seq/2.seurat_obj_dimred_Penter2021_atac.rds")
+```
+
+
+## Read data
+
+```{r}
+seurat_obj <- readRDS(path_to_obj)
+```
+
+
+# QC
+
+```{r}
+
+```
+
+
+# Dimensionality reduction
+
+```{r}
+seurat_obj <- RunTFIDF(seurat_obj)
+seurat_obj <- FindTopFeatures(seurat_obj, min.cutoff = "q25")
+seurat_obj <- RunSVD(seurat_obj)
+DepthCor(seurat_obj)
+seurat_obj <- RunUMAP(object = seurat_obj, reduction = "lsi", dims = 2:30)
+DimPlot(seurat_obj, group.by = "disease_state")
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat_obj, path_to_save)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
