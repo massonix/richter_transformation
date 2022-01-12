@@ -41,6 +41,11 @@ library(glue)
 ```{r}
 path_to_obj <- here::here("results/R_objects/Penter2021/scATAC-seq/1.seurat_obj_init_Penter2021_atac.rds")
 path_to_save <- here::here("results/R_objects/Penter2021/scATAC-seq/2.seurat_obj_dimred_Penter2021_atac.rds")
+
+
+# Thresholds
+min_tss_enrichment <- 3.25
+min_num_frag <- 1000
 ```
 
 
@@ -53,8 +58,47 @@ seurat_obj <- readRDS(path_to_obj)
 
 # QC
 
-```{r}
+## Calculate QC metrics
 
+```{r}
+seurat_obj <- NucleosomeSignal(seurat_obj)
+seurat_obj <- TSSEnrichment(seurat_obj, fast = FALSE)
+```
+
+
+## Plot
+
+```{r}
+# Transcription start site enrichment plot
+TSSPlot(seurat_obj)
+VlnPlot(seurat_obj, "TSS.enrichment", pt.size = 0) +
+  NoLegend() +
+  geom_hline(yintercept = min_tss_enrichment, color = "red", linetype = "dashed") +
+  theme(axis.title.x = element_blank())
+
+
+# Number of fragments per cell
+VlnPlot(seurat_obj, "nFeature_ATAC", pt.size = 0) +
+  NoLegend() +
+  geom_hline(yintercept = min_num_frag, color = "red", linetype = "dashed") +
+  scale_y_log10() +
+  theme(axis.title.x = element_blank())
+```
+
+
+## Filter
+
+According to [Penter et al.](https://cancerdiscovery.aacrjournals.org/content/11/12/3048): "The ArchR manual was followed for exclusion of low- quality cells (transcription start site (TSS) enrichment <4 and fragments per cell <1000)."
+
+Looking at the plots above, a TSS enrichment of 4 seems too stringent, so we will lower it to `r min_tss_enrichment`.
+
+```{r}
+is_low_quality <- with(seurat_obj@meta.data,
+  TSS.enrichment < min_tss_enrichment |
+  nFeature_ATAC < min_num_frag
+)
+table(is_low_quality)
+seurat_obj <- subset(seurat_obj, cells = colnames(seurat_obj)[!is_low_quality])
 ```
 
 
@@ -66,7 +110,14 @@ seurat_obj <- FindTopFeatures(seurat_obj, min.cutoff = "q25")
 seurat_obj <- RunSVD(seurat_obj)
 DepthCor(seurat_obj)
 seurat_obj <- RunUMAP(object = seurat_obj, reduction = "lsi", dims = 2:30)
+seurat_obj <- FindNeighbors(object = seurat_obj, reduction = "lsi", dims = 2:30)
+
+
+# Plot
 DimPlot(seurat_obj, group.by = "disease_state")
+DimPlot(seurat_obj, group.by = "dataset_id")
+DimPlot(seurat_obj, group.by = "sample_description")
+DimPlot(seurat_obj, group.by = "tissue")
 ```
 
 
