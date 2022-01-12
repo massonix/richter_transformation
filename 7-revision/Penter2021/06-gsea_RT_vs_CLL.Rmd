@@ -1,0 +1,231 @@
+---
+title: 'Gene Set Enrichment Analysis (RT vs CLL)'
+author: "Ramon Massoni-Badosa"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here we will perform a gene set enrichment analysis (GSEA) using [clusterprofiler](https://yulab-smu.top/biomedical-knowledge-mining-book/clusterprofiler-go.html) with the differentially expressed genes we obtained previously.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r packages}
+library(Seurat)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(ggrepel)
+library(ggforce)
+library(tidyverse)
+```
+
+
+## Define parameters
+
+```{r parameters}
+# Paths
+path_to_obj <- here::here("results/R_objects/Penter2021/3.seurat_obj_clustered_Penter2021.rds")
+path_to_deg <- here::here("results/R_objects/Penter2021/dea_RT_vs_CLL_Penter2021.rds")
+path_to_save_rds <- here::here("results/R_objects/Penter2021/gsea_RT_vs_CLL_Penter2021.rds")
+path_to_save_xlsx <- here::here("results/tables/Penter2021/gsea_RT_vs_CLL_Penter2021.xlsx")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+cols_rt <- c("#dcdddc", "#cd8899")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+alpha <- 0.05
+GO_max_total_genes <- 250
+GO_min_enriched_genes <- 3
+GO_p_adj_threshold <- 0.01
+GO_min_odds_ratio <- 2.5
+max_gs_size <- 250
+min_gs_size <- 10
+simplify_cutoff <- 0.75
+```
+
+
+## Load data
+
+```{r load}
+# Load Seurat object
+seurat <- readRDS(path_to_obj)
+
+
+# Plot
+DimPlot(seurat, group.by = "disease_state", cols = cols_rt) +
+  theme(plot.title = element_blank())
+seurat$donor_id <- str_remove(seurat$sample_id, "_.*$")
+DimPlot(seurat, group.by = "donor_id", cols = color_palette) +
+  theme(plot.title = element_blank())
+DimPlot(seurat, group.by = "tissue") +
+  theme(plot.title = element_blank())
+
+
+# Load DEG
+dea <- readRDS(path_to_deg)
+```
+
+
+# GSEA
+
+```{r gsea, fig.height=11}
+set.seed(1234)
+gene_list <- dea$avg_log2FC
+names(gene_list) <- dea$gene
+gsea_results <- gseGO(
+  gene_list,
+  ont = "BP",
+  OrgDb = org.Hs.eg.db,
+  keyType = "SYMBOL",
+  minGSSize = min_gs_size,
+  maxGSSize = max_gs_size,
+  seed = TRUE
+)
+gsea_results <- clusterProfiler::simplify(
+  gsea_results,
+  cutoff = simplify_cutoff
+)
+gsea_sorted <- gsea_results@result %>%
+  dplyr::filter(p.adjust < alpha) %>%
+  dplyr::arrange(desc(NES))
+DT::datatable(gsea_sorted, options = list(scrollX = TRUE))
+
+
+# Plot
+(dot_plot_gsea <- clusterProfiler::dotplot(
+  gsea_results,
+  x = "NES",
+  showCategory = 40,
+  color = "p.adjust"
+) +
+  theme(axis.text = element_text(size = 11)))
+```
+
+
+# Calculate OXPHOS and BCR signatures
+
+```{r signatures}
+# GSEA plots
+selected_terms <- c("GO:0006119", "GO:0050853")
+selected_titles <- c(
+  "oxidative phosphorylation",
+  "B cell receptor signaling pathway"
+)
+gsea_plots <- purrr::map2(selected_terms, selected_titles, function(x, title) {
+  p <- gseaplot(gsea_results, geneSetID = x, by = "runningScore", title = title)
+  p
+})
+gsea_plots
+
+
+# Calculate signatures. Since the gene symbols of mitochondrial genes in Seurat
+# object start with "MT-", we will add this prefix in the gene symbols of the
+# OXPHOS set.
+gene_sets <- gsea_results@geneSets
+signatures <- list(
+  oxphos = gene_sets$`GO:0006119`,
+  bcr_signaling = gene_sets$`GO:0050853`
+)
+mt_genes <- rownames(seurat) %>%
+  str_subset("^MT-") %>%
+  str_remove("^MT-")
+signatures$oxphos[signatures$oxphos %in% mt_genes] <- str_c(
+  "MT-",
+  signatures$oxphos[signatures$oxphos %in% mt_genes],
+  sep = ""
+)
+seurat <- AddModuleScore(
+  seurat,
+  features = signatures,
+  name = names(signatures)
+)
+
+
+# Plot
+selected_sign <- c("oxphos1", "bcr_signaling2")
+selected_titles2 <- c("OXPHOS Score", "BCR Signaling Score")
+umaps_sign <- purrr::map2(selected_sign, selected_titles2, \(x, y) {
+  p <- FeaturePlot(seurat, x) +
+    scale_color_viridis_c(option = "magma") +
+    ggtitle(y)
+  p
+})
+umaps_sign
+vln_rt_vs_cll <-  purrr::map2(selected_sign, selected_titles2, \(x, y) {
+  p <- VlnPlot(
+    seurat,
+    x,
+    group.by = "disease_state",
+    cols = cols_rt,
+    pt.size = 0
+  ) +
+    ylab(y) +
+    theme(
+      plot.title = element_blank(),
+      legend.position = "none",
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 11),
+      axis.text = element_text(size = 10)
+    )
+  p
+})
+vln_rt_vs_cll
+df <- seurat@meta.data
+vln_rt_vs_cll2 <-  purrr::map2(selected_sign, selected_titles2, \(x, y) {
+  p <- df %>%
+    ggplot(aes_string("sample_id", x, fill = "disease_state")) +
+      geom_violin() +
+      scale_fill_manual(values = cols_rt) +
+      ylab(y) +
+      theme_classic() +
+      theme(
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        legend.title = element_blank(),
+        legend.position = "top"
+      )
+  p
+})
+vln_rt_vs_cll2
+```
+
+
+# Save
+
+```{r save}
+saveRDS(gsea_sorted, path_to_save_rds)
+gsea_sorted_l <- list(GSEA_RT_vs_CLL = gsea_sorted)
+openxlsx::write.xlsx(gsea_sorted_l, path_to_save_xlsx)
+```
+
+
+# Session Information
+
+```{r session_info}
+sessionInfo()
+```

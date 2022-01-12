@@ -1,0 +1,240 @@
+---
+title: 'Early seeding CLL9'
+author: "Ramon Massoni-Badosa"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here we will analyze the case CLL9 alone. Previously, we compared RT vs CLL using all samples, without defining clusters. However, we know from our study that there exists intratumor heterogeneity in both CLL and RT samples. That is, in RT samples we can still find a CLL cluster, and viceversa. Thus, we will focus exclusively on the case CLL9, for which we have two samples, before and after RT. We will:
+
+* Check whether we can find an early seeding of RT in the CLL sample.
+* Perform a differential expression analysis (DEA) between RT and CLL clusters.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r packages}
+library(Seurat)
+library(tidyverse)
+library(ggrepel)
+```
+
+
+## Define parameters
+
+```{r parameters}
+# Paths
+path_to_obj <- here::here("results/R_objects/Penter2021/3.seurat_obj_clustered_Penter2021.rds")
+path_to_save <- here::here("results/R_objects/Penter2021/4.seurat_obj_CLL9_Penter2021.rds")
+path_to_save_xlsx <- here::here("results/tables/DEA/dea_RT_vs_CLL_CLL9_Penter2021.xlsx")
+
+
+# Colors
+color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
+                   "blue", "mediumorchid2", "coral2", "blueviolet",
+                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
+                   "green", "lightgray", "hotpink1")
+cols_rt <- c("#dcdddc", "#cd8899")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Thresholds
+alpha <- 0.05
+min_avg_log2FC <- 0.25
+selected_avg_log2FC <- 0.9
+selected_pct_cells <- 10
+selected_significance_alpha <- alpha
+```
+
+
+## Load data
+
+```{r load}
+seurat <- readRDS(path_to_obj)
+```
+
+
+# Subset and cluster CLL9
+
+```{r}
+# Subset
+seurat$donor_id <- str_remove(seurat$sample_id, "_.*$")
+seurat <- subset(seurat, donor_id == "CLL9")
+seurat
+
+
+# Reprocess
+seurat <- process_seurat(seurat, dims = 1:30)
+DimPlot(
+  seurat,
+  group.by = "disease_state",
+  pt.size = 1.2,
+  split.by = "disease_state",
+  cols = cols_rt
+) +
+  theme(plot.title = element_blank())
+DimPlot(
+  seurat,
+  group.by = "sample_description",
+  split.by = "sample_description",
+  cols = color_palette
+) +
+  theme(plot.title = element_blank())
+DimPlot(seurat, group.by = "tissue", split.by = "tissue") +
+  theme(plot.title = element_blank())
+
+
+# Cluster
+seurat <- FindNeighbors(seurat, dims = 1:30, reduction = "pca")
+seurat <- FindClusters(seurat, resolution = 0.6)
+DimPlot(seurat, cols = color_palette)
+
+
+# Markers
+markers_all <- FindAllMarkers(seurat, only.pos = TRUE, logfc.threshold = 0.5)
+DT::datatable(markers_all, options = list(scrollX = TRUE))
+
+
+# Cell cycle scoring
+seurat <- CellCycleScoring(
+  seurat,
+  s.features = cc.genes.updated.2019$s.genes,
+  g2m.features = cc.genes.updated.2019$g2m.genes
+)
+FeaturePlot(seurat, c("S.Score", "G2M.Score"))
+```
+
+
+* Clusters 0, 3, and 4 are homogeneous and they correspond to RT cluster. We see how they express a plethora of genes involved in mitochondrial metabolism: ATP5MF, NDUFS6, UQCR10, SOD1, etc.
+* Clusters 1, 2, and 5 are bona-fide CLL clusters.
+* Cluster 7 corresponds to the MIR155HGhi cluster that we have found in our own samples.
+* Cluster 8 likely corersponds to poor-quality cells, because its main markers are genes encoded in the mitochondrial genome. However, it also shows a high expression of important genes such as CD79B and ZAP70, so we will keep it.
+* Cluster 6 displays a signature of poor-quality cells (MALAT1), and unfiltered erythrocytes/erythroblasts (HBB), so we will remove it:
+
+```{r}
+table(seurat$seurat_clusters, seurat$disease_state)
+seurat <- subset(seurat, seurat_clusters != "6")
+seurat <- process_seurat(seurat, dims = 1:30)
+DimPlot(
+  seurat,
+  group.by = "disease_state",
+  pt.size = 1.2,
+  split.by = "disease_state",
+  cols = cols_rt
+) +
+  theme(plot.title = element_blank())
+DimPlot(seurat, group.by = "tissue", split.by = "tissue") +
+  theme(plot.title = element_blank())
+DimPlot(
+  seurat,
+  group.by = "sample_description",
+  split.by = "sample_description",
+  cols = color_palette
+) +
+  theme(plot.title = element_blank())
+```
+
+We still see a cluster of remaining erythroblasts/erythrocytes, let us find it and remove it:
+
+```{r}
+FeaturePlot(seurat, c("HBM", "HBA2", "HBD"))
+seurat <- FindNeighbors(seurat, dims = 1:30, reduction = "pca")
+seurat <- FindClusters(seurat, resolution = 1.25)
+DimPlot(seurat, cols = color_palette)
+seurat <- subset(seurat, seurat_clusters != "14")
+```
+
+
+Let us perform a soft clustering so we can easily fetch both RT and CLL populations:
+
+```{r}
+seurat <- FindNeighbors(seurat, dims = 1:30, reduction = "pca")
+seurat <- FindClusters(seurat, resolution = 0.05)
+DimPlot(seurat)
+seurat$annotation <- case_when(
+  seurat$seurat_clusters == "0" ~ "RT",
+  seurat$seurat_clusters == "1" ~ "CLL"
+)
+```
+
+
+# Differential expression analysis
+
+```{r}
+Idents(seurat) <- "annotation"
+dea <- FindMarkers(
+  seurat,
+  ident.1 = "RT",
+  ident.2 = "CLL",
+  only.pos = FALSE,
+  logfc.threshold = 0
+)
+dea <- dea %>%
+  arrange(desc(avg_log2FC))
+dea$direction <- case_when(
+  dea$p_val_adj < alpha & dea$avg_log2FC > min_avg_log2FC ~ "up",
+  dea$p_val_adj < alpha & dea$avg_log2FC < 0 & abs(dea$avg_log2FC) > min_avg_log2FC ~ "down",
+  TRUE ~ "not sig."
+)
+pct_cells <- Matrix::rowMeans(seurat[["RNA"]]@counts > 0) * 100
+dea$pct_cells_expressing <- pct_cells[dea$gene]
+
+
+# Inspect table
+DT::datatable(dea, options = list(scrollX = TRUE))
+
+
+# MA plot
+(ma_gg <- ma_plot(
+  dea,
+  selected_avg_log2FC = selected_avg_log2FC,
+  selected_pct_cells = selected_pct_cells,
+  selected_significance_alpha = selected_significance_alpha
+))
+```
+
+
+# Early seeding
+
+```{r}
+DimPlot(
+  seurat,
+  group.by = "annotation",
+  split.by = "sample_description",
+  cols = cols_rt,
+  pt.size = 1
+)
+```
+
+
+# Save
+
+```{r}
+saveRDS(seurat, path_to_save)
+openxlsx::write.xlsx(dea, path_to_save_xlsx)
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
