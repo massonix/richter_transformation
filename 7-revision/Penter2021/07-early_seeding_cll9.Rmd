@@ -32,6 +32,8 @@ Here we will analyze the case CLL9 alone. Previously, we compared RT vs CLL usin
 library(Seurat)
 library(tidyverse)
 library(ggrepel)
+library(DT)
+library(openxlsx)
 ```
 
 
@@ -180,6 +182,7 @@ seurat$annotation <- case_when(
 
 ```{r}
 Idents(seurat) <- "annotation"
+saveRDS(seurat, here::here("7-revision/Penter2021/tmp/seurat_tmp.rds"))
 dea <- FindMarkers(
   seurat,
   ident.1 = "RT",
@@ -195,6 +198,7 @@ dea$direction <- case_when(
   TRUE ~ "not sig."
 )
 pct_cells <- Matrix::rowMeans(seurat[["RNA"]]@counts > 0) * 100
+dea$gene <- rownames(dea)
 dea$pct_cells_expressing <- pct_cells[dea$gene]
 
 
