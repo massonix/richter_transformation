@@ -134,6 +134,7 @@ sigm_oxphos <- test_df %>%
     theme_classic() +
     theme(legend.title = element_blank()) +
     guides(color = guide_legend(override.aes = list(size = 2)))
+sigm_oxphos
 sigm_bcr <- test_df %>%
   mutate(is_rt = ifelse(is_rt == 1, "RT", "CLL")) %>% 
   ggplot(aes(bcr_score_UCell, probabilities_bcr, color = is_rt)) +
@@ -143,6 +144,7 @@ sigm_bcr <- test_df %>%
     theme_classic() +
     theme(legend.title = element_blank()) +
     guides(color = guide_legend(override.aes = list(size = 2)))
+sigm_bcr
 
 
 # Area under the curve (AUC)
