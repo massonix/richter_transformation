@@ -1,0 +1,175 @@
+---
+title: 'Predict Richter cells using a logistic regression model'
+author: "Ramon Massoni-Badosa"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here, we aim to classify unseen single-cell transcriptomes derived from blood samples of CLL patients to predict which are Richter and which are CLL. We will use a [logistic regression](https://en.wikipedia.org/wiki/Logistic_regression) model, following the explanation described in the book ["Introduction to Statistical Learning"](https://www.statlearning.com/) (second edition). We will use the following explanatory variables:
+
+1. OXPHOS score
+2. BCR signaling score
+3. OXPHOS + BCR score in a multivariate logistic regression model.
+
+The purposes are to assess which variable has more predictive power, and whether using a combination of both variables we can improve our predictions.
+
+
+## Load packages
+
+```{r packages}
+library(Seurat)
+library(tidyverse)
+library(DescTools)
+library(pROC)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/seurat_training_and_test.rds")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Colors
+cols_rt <- c("#dcdddc", "#cd8899")
+```
+
+
+## Read data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+```
+
+
+# Visualize distribution of explanatory variables
+
+
+```{r}
+# Violin plots + boxplots
+training_set <- subset(seurat, is_training == "training")
+training_df <- training_set@meta.data[, c("is_rt", "oxphos_score_UCell", "bcr_score_UCell")]
+vln_plot_oxphos <- training_df %>%
+  ggplot(aes(is_rt, oxphos_score_UCell, fill = is_rt)) +
+    geom_violin() +
+    geom_boxplot(width = 0.25) +
+    scale_fill_manual(values = cols_rt) +
+    ylab("OXPHOS score") +
+    theme_classic() +
+    theme(legend.position = "none", axis.title.x = element_blank())
+vln_plot_bcr <- training_df %>%
+  ggplot(aes(is_rt, bcr_score_UCell, fill = is_rt)) +
+    geom_violin() +
+    geom_boxplot(width = 0.25) +
+    scale_fill_manual(values = cols_rt) +
+    ylab("BCR signaling score") +
+    theme_classic() +
+    theme(legend.position = "none", axis.title.x = element_blank())
+vln_plot_oxphos | vln_plot_bcr
+
+
+# Scatter plot
+scatter_plot <- training_df %>%
+  ggplot(aes(oxphos_score_UCell, bcr_score_UCell, color = is_rt)) +
+    geom_point(size = 0.25) +
+    scale_color_manual(values = cols_rt) +
+    labs(x = "OXPHOS score", y = "BCR signaling score") +
+    theme_classic() +
+    theme(legend.position = "none")
+scatter_plot
+```
+
+
+# Train models
+
+```{r}
+training_df$is_rt <- ifelse(training_df$is_rt == "RT", 1, 0)
+oxphos_fit <- glm(is_rt ~ oxphos_score_UCell, data = training_df, family = "binomial")
+bcr_fit <- glm(is_rt ~ bcr_score_UCell, data = training_df, family = "binomial")
+oxphos_bcr_fit <- glm(is_rt ~ ., data = training_df, family = "binomial")
+summary(oxphos_fit)
+summary(bcr_fit)
+summary(oxphos_bcr_fit)
+```
+
+
+
+# Test models
+
+```{r}
+# Predict probabilities on test set
+test_set <- subset(seurat, is_training != "training")
+test_df <- test_set@meta.data[, c("is_rt", "oxphos_score_UCell", "bcr_score_UCell")]
+test_df$is_rt <- ifelse(test_df$is_rt == "RT", 1, 0)
+test_df$probabilities_oxhpos <- predict(oxphos_fit,newdata = test_df, type = "response")
+test_df$probabilities_bcr <- predict(bcr_fit, newdata = test_df, type = "response")
+test_df$probabilities_oxhpos_bcr <- predict(oxphos_bcr_fit, newdata = test_df, type = "response")
+
+
+# Plot sigmoidal curves
+sigm_oxphos <- test_df %>%
+  mutate(is_rt = ifelse(is_rt == 1, "RT", "CLL")) %>% 
+  ggplot(aes(oxphos_score_UCell, probabilities_oxhpos, color = is_rt)) +
+    geom_point(size = 0.75) +
+    scale_color_manual(values = cols_rt) +
+    labs(x = "OXPHOS Score", y = "P(RT)") +
+    theme_classic() +
+    theme(legend.title = element_blank()) +
+    guides(color = guide_legend(override.aes = list(size = 2)))
+sigm_bcr <- test_df %>%
+  mutate(is_rt = ifelse(is_rt == 1, "RT", "CLL")) %>% 
+  ggplot(aes(bcr_score_UCell, probabilities_bcr, color = is_rt)) +
+    geom_point(size = 0.75) +
+    scale_color_manual(values = cols_rt) +
+    labs(x = "BCR signaling score", y = "P(RT)") +
+    theme_classic() +
+    theme(legend.title = element_blank()) +
+    guides(color = guide_legend(override.aes = list(size = 2)))
+
+
+# Area under the curve (AUC)
+roc_oxphos <- pROC::roc(
+  response = test_df$is_rt,
+  predictor = test_df$probabilities_oxhpos
+)
+roc_bcr <- pROC::roc(
+  response = test_df$is_rt,
+  predictor = test_df$probabilities_bcr
+)
+roc_oxphos_bcr <- pROC::roc(
+  response = test_df$is_rt,
+  predictor = test_df$probabilities_oxhpos_bcr
+)
+plot(roc_oxphos)
+plot(roc_bcr)
+plot(roc_oxphos_bcr)
+roc_oxphos$auc[1]
+roc_bcr$auc[1]
+roc_oxphos_bcr$auc[1]
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
