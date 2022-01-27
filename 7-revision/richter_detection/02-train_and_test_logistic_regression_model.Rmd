@@ -7,6 +7,8 @@ output:
     toc: true
     toc_float: true
     number_sections: true
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -42,7 +44,9 @@ library(pROC)
 ```{r}
 # Paths
 path_to_obj <- here::here("results/R_objects/seurat_training_and_test.rds")
-
+path_to_save_training <- here::here("results/tables/richter_logistic_regression_df_training.csv")
+path_to_save_test <- here::here("results/tables/richter_logistic_regression_df_test.csv")
+path_to_save_models <- here::here("results/R_objects/logistic_regression_models.rds")
 
 # Source functions
 source(here::here("bin/utils.R"))
@@ -168,6 +172,41 @@ roc_bcr$auc[1]
 roc_oxphos_bcr$auc[1]
 ```
 
+
+Of note, Receiver Operating Characteristic (ROC) curves do not take into account the intercept of the logistic regression model, which informs about the proportion of RT cases in the training set. Although the area under the ROC curves (AUROC) between OXPHOS and OXPHOS+BCR are almost identical, perhaps the probability values (P(RT)) are higher in one than in the other. Let us inspect this:
+
+```{r}
+df1 <- test_df[, c("is_rt", "oxphos_score_UCell", "bcr_score_UCell")]
+dfs <- list(OXPHOS = df1, BCR = df1, OXPHOS_BCR = df1)
+dfs$OXPHOS$probability_rt <- test_df$probabilities_oxhpos
+dfs$BCR$probability_rt <- test_df$probabilities_bcr
+dfs$OXPHOS_BCR$probability_rt <- test_df$probabilities_oxhpos_bcr
+test_tidy_df <- bind_rows(dfs, .id = "model")
+(box_plots <- test_tidy_df %>%
+  mutate(is_rt = ifelse(is_rt == 1, "RT", "CLL")) %>%
+  ggplot(aes(model, probability_rt, fill = is_rt)) +
+    geom_boxplot() +
+    scale_fill_manual(values = cols_rt) +
+    labs(x = "Model", y = "P(RT)", fill = "") +
+    theme_classic())
+summary(test_df$probabilities_oxhpos)
+summary(test_df$probabilities_bcr)
+summary(test_df$probabilities_oxhpos_bcr)
+```
+
+
+# Save
+
+```{r}
+write_delim(training_df, path_to_save_training, delim = ";", col_names = TRUE)
+write_delim(test_tidy_df, path_to_save_test, delim = ";", col_names = TRUE)
+models <- list(
+  OXPHOS = oxphos_fit,
+  BCR = bcr_fit,
+  OXPHOS_BCR = oxphos_bcr_fit
+)
+saveRDS(models, path_to_save_models)
+```
 
 # Session Information
 

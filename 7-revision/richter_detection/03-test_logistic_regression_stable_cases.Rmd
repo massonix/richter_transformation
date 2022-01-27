@@ -1,0 +1,153 @@
+---
+title: 'Predict Richter cells using a logistic regression model (benchmarking cases)'
+author: "Ramon Massoni-Badosa"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+Here we will use an extra test set: the 3 CLL samples we processed with scRNA-seq in our [benchmarking article](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02032-0) of the effect of processing time on single-cell transcriptomes. The rationale is that these represent 3 stable cases of "watchful-waiting" CLLs. Thus, we can use them as negative controls to ensure that our classifier is specific enough and thus not classify true CLL cells as RT.
+
+
+## Load packages
+
+```{r packages}
+library(Seurat)
+library(tidyverse)
+library(DescTools)
+library(pROC)
+library(UCell)
+library(readxl)
+```
+
+
+## Define parameters
+
+```{r}
+# Paths
+path_to_obj <- here::here("results/R_objects/sampling_artifacts/cll_seurat_annotated.rds")
+path_to_gsea <- here::here("results/tables/Penter2021/gsea_RT_vs_CLL_Penter2021.xlsx")
+path_to_models <- here::here("results/R_objects/logistic_regression_models.rds")
+
+# path_to_save_training <- here::here("results/tables/richter_logistic_regression_df_training.csv")
+# path_to_save_test <- here::here("results/tables/richter_logistic_regression_df_test.csv")
+
+
+# Source functions
+source(here::here("bin/utils.R"))
+
+
+# Colors
+cols_rt <- c("#dcdddc", "#cd8899")
+```
+
+
+## Read data
+
+```{r}
+seurat <- readRDS(path_to_obj)
+gsea <- read_excel(path_to_gsea)
+models <- readRDS(path_to_models)
+DimPlot(seurat, group.by = "cell_type")
+DimPlot(seurat, group.by = "time")
+DimPlot(seurat, group.by = "temperature")
+```
+
+
+We will subset to 0 and 2 hours, because we know that these cells are not affected by sampling time. In addition, we will keep only CLL cells and get rid of the microenvironment:
+
+```{r}
+cll_levels <- c("CLL 1892", "CLL 1472", "CLL 1220")
+seurat <- subset(seurat, time %in% c("0h", "2h") & cell_type %in% cll_levels)
+DimPlot(seurat, group.by = "cell_type")
+DimPlot(seurat, group.by = "time")
+DimPlot(seurat, group.by = "temperature")
+```
+
+
+# Score OXPHOS and BCR
+
+```{r}
+seurat <- score_oxphos_bcr(seurat, gsea = gsea)
+```
+
+Plot:
+
+```{r}
+seurat$is_rt <- "CLL"
+vln_plot_oxphos <- seurat@meta.data %>%
+  ggplot(aes(is_rt, oxphos_score_UCell, fill = is_rt)) +
+    geom_violin() +
+    geom_boxplot(width = 0.25) +
+    scale_fill_manual(values = cols_rt) +
+    ylab("OXPHOS score") +
+    theme_classic() +
+    theme(legend.position = "none", axis.title.x = element_blank())
+vln_plot_bcr <- seurat@meta.data %>%
+  ggplot(aes(is_rt, bcr_score_UCell, fill = is_rt)) +
+    geom_violin() +
+    geom_boxplot(width = 0.25) +
+    scale_fill_manual(values = cols_rt) +
+    ylab("BCR signaling score") +
+    theme_classic() +
+    theme(legend.position = "none", axis.title.x = element_blank())
+vln_plot_oxphos | vln_plot_bcr
+```
+
+
+# Test
+
+```{r}
+test_df <- seurat@meta.data[, c("is_rt", "oxphos_score_UCell", "bcr_score_UCell")]
+test_df$is_rt <- ifelse(test_df$is_rt == "RT", 1, 0)
+test_df$probabilities_oxhpos <- predict(
+  models$OXPHOS,
+  newdata = test_df,
+  type = "response"
+)
+test_df$probabilities_bcr <- predict(
+  models$BCR,
+  newdata = test_df,
+  type = "response"
+)
+test_df$probabilities_oxhpos_bcr <- predict(
+  models$OXPHOS_BCR,
+  newdata = test_df,
+  type = "response"
+)
+df1 <- test_df[, c("is_rt", "oxphos_score_UCell", "bcr_score_UCell")]
+dfs <- list(OXPHOS = df1, BCR = df1, OXPHOS_BCR = df1)
+dfs$OXPHOS$probability_rt <- test_df$probabilities_oxhpos
+dfs$BCR$probability_rt <- test_df$probabilities_bcr
+dfs$OXPHOS_BCR$probability_rt <- test_df$probabilities_oxhpos_bcr
+test_tidy_df <- bind_rows(dfs, .id = "model")
+(box_plots <- test_tidy_df %>%
+  mutate(is_rt = ifelse(is_rt == 1, "RT", "CLL")) %>%
+  ggplot(aes(model, probability_rt, fill = is_rt)) +
+    geom_boxplot() +
+    scale_fill_manual(values = cols_rt) +
+    labs(x = "Model", y = "P(RT)", fill = "") +
+    theme_classic())
+```
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
