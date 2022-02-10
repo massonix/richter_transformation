@@ -7,6 +7,8 @@ output:
     toc: true
     toc_float: true
     number_sections: true
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -32,6 +34,8 @@ library(org.Hs.eg.db)
 library(ggrepel)
 library(ggforce)
 library(tidyverse)
+library(DT)
+library(here)
 ```
 
 
@@ -41,20 +45,14 @@ library(tidyverse)
 # Paths
 path_to_obj <- here::here("results/R_objects/Penter2021/3.seurat_obj_clustered_Penter2021.rds")
 path_to_deg <- here::here("results/R_objects/Penter2021/dea_RT_vs_CLL_Penter2021.rds")
+path_to_save <- here::here("results/R_objects/Penter2021/4.seurat_obj_with_oxphos_Penter2021.rds")
 path_to_save_rds <- here::here("results/R_objects/Penter2021/gsea_RT_vs_CLL_Penter2021.rds")
+path_to_save_gsea <- here::here("results/R_objects/Penter2021/gsea_RT_vs_CLL_Penter2021_object.rds")
 path_to_save_xlsx <- here::here("results/tables/Penter2021/gsea_RT_vs_CLL_Penter2021.xlsx")
 
 
-# Colors
-color_palette <- c("black", "gray", "red", "yellow", "violet", "green4",
-                   "blue", "mediumorchid2", "coral2", "blueviolet",
-                   "indianred4", "deepskyblue1", "dimgray", "deeppink1",
-                   "green", "lightgray", "hotpink1")
-cols_rt <- c("#dcdddc", "#cd8899")
-
-
 # Source functions
-source(here::here("bin/utils.R"))
+source(here::here("bin/utils_revision.R"))
 
 
 # Thresholds
@@ -127,6 +125,13 @@ DT::datatable(gsea_sorted, options = list(scrollX = TRUE))
 ```
 
 
+Let us plot the GO results to match the style used for bulk transcriptomics:
+
+```{r}
+(nes_gg <- plot_nes(gsea_results, alpha = alpha))
+```
+
+
 # Calculate OXPHOS and BCR signatures
 
 ```{r signatures}
@@ -146,79 +151,51 @@ gsea_plots
 # Calculate signatures. Since the gene symbols of mitochondrial genes in Seurat
 # object start with "MT-", we will add this prefix in the gene symbols of the
 # OXPHOS set.
-gene_sets <- gsea_results@geneSets
-signatures <- list(
-  oxphos = gene_sets$`GO:0006119`,
-  bcr_signaling = gene_sets$`GO:0050853`
-)
-mt_genes <- rownames(seurat) %>%
-  str_subset("^MT-") %>%
-  str_remove("^MT-")
-signatures$oxphos[signatures$oxphos %in% mt_genes] <- str_c(
-  "MT-",
-  signatures$oxphos[signatures$oxphos %in% mt_genes],
-  sep = ""
-)
-seurat <- AddModuleScore(
-  seurat,
-  features = signatures,
-  name = names(signatures)
-)
+seurat <- score_oxphos(seurat, gsea = gsea_results, name = "oxphos_score")
+seurat <- score_bcr(seurat, gsea = gsea_results, name = "bcr_score")
 
 
 # Plot
-selected_sign <- c("oxphos1", "bcr_signaling2")
-selected_titles2 <- c("OXPHOS Score", "BCR Signaling Score")
-umaps_sign <- purrr::map2(selected_sign, selected_titles2, \(x, y) {
+sel_sign <- c("oxphos_score", "bcr_score")
+sel_titles2 <- c("OXPHOS Score", "BCR Signaling Score")
+(umaps_sign <- purrr::map2(sel_sign, sel_titles2, \(x, y) {
   p <- FeaturePlot(seurat, x) +
     scale_color_viridis_c(option = "magma") +
     ggtitle(y)
   p
-})
-umaps_sign
-vln_rt_vs_cll <-  purrr::map2(selected_sign, selected_titles2, \(x, y) {
-  p <- VlnPlot(
+}))
+(vln_all <- purrr::map2(sel_sign, sel_titles2, \(x, y) {
+  p <- plot_signature(
     seurat,
-    x,
+    signature = x,
     group.by = "disease_state",
-    cols = cols_rt,
-    pt.size = 0
-  ) +
-    ylab(y) +
-    theme(
-      plot.title = element_blank(),
-      legend.position = "none",
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(size = 11),
-      axis.text = element_text(size = 10)
-    )
+    fill.by = "disease_state",
+    ylab = y,
+    cols = cols_rt
+  )
+  p + theme(legend.position = "none")
+}))
+
+(vln_sample_id <- purrr::map2(sel_sign, sel_titles2, \(x, y) {
+  p <- plot_signature(
+    seurat,
+    signature = x,
+    group.by = "sample_id",
+    fill.by = "disease_state",
+    ylab = y,
+    cols = cols_rt
+  )
   p
-})
-vln_rt_vs_cll
-df <- seurat@meta.data
-vln_rt_vs_cll2 <-  purrr::map2(selected_sign, selected_titles2, \(x, y) {
-  p <- df %>%
-    ggplot(aes_string("sample_id", x, fill = "disease_state")) +
-      geom_violin() +
-      scale_fill_manual(values = cols_rt) +
-      ylab(y) +
-      theme_classic() +
-      theme(
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
-        legend.title = element_blank(),
-        legend.position = "top"
-      )
-  p
-})
-vln_rt_vs_cll2
+}))
 ```
 
 
 # Save
 
 ```{r save}
+saveRDS(seurat, path_to_save)
 saveRDS(gsea_sorted, path_to_save_rds)
+saveRDS(gsea_results, path_to_save_gsea)
 gsea_sorted_l <- list(GSEA_RT_vs_CLL = gsea_sorted)
 openxlsx::write.xlsx(gsea_sorted_l, path_to_save_xlsx)
 ```

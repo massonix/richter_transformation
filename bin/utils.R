@@ -379,3 +379,78 @@ genes_to_dotplot <- list(
               "MIR155HG",  "CD83", "ENO1", "CD40", "CCR7", "KLF6",
               "PIK3IP1")
 )
+
+
+rt_vs_cll_dict <- list(
+  "12" = c(
+    "CXCR4loCD27hi" = "normal",
+    "CXCR4hiCD27lo" = "normal",
+    "MIR155HGhi" = "normal",
+    "MZB1hiIGHMhiXBP1hi" = "normal",
+    "CCND2hi RT" = "malignant",
+    "CCND2lo RT" = "malignant",
+    "RT proliferative" = "malignant"
+  ),
+  "19" = c(
+    "CXCR4hiCD27lo" = "normal",
+    "CXCR4loCD27hi" = "normal",
+    "MIR155HGhi CLL" = "normal",
+    "MIR155HGhi RT" = "malignant",
+    "TP53INP1hi RT" = "malignant",
+    "RT proliferative" = "malignant"
+  ),
+  "63" = c(
+    "CLL" = "normal",
+    "RT quiescent" = "malignant",
+    "RT proliferative" = "malignant"
+  ),
+  "365" = c(
+    "CLL" = "normal",
+    "CXCR4loCD27hi RT" = "malignant",
+    "MIR155HGhi RT" = "malignant",
+    "RT quiescent" = "malignant",
+    "RT proliferative" = "malignant"
+  ),
+  "3299" = c(
+    "CXCR4hiCD27lo" = "normal",
+    "CXCR4loCD27hi" = "normal",
+    "CD83loMIR155HGhi" = "normal",
+    "CD83hiMIR155HGhi" = "normal",
+    "RT" = "malignant"
+  )
+)
+
+
+find_assay_specific_features <- function(seurat_obj,
+                                         assay_var = "assay",
+                                         n_features = 5000) {
+  seurat_list <- SplitObject(seurat_obj, split.by = assay_var)
+  seurat_list <- purrr::map(
+    seurat_list,
+    FindVariableFeatures,
+    nfeatures = n_features
+  )
+  hvg <- purrr::map(seurat_list, VariableFeatures)
+  shared_hvg <- Reduce(intersect, hvg)
+  shared_hvg
+}
+integrate_assays <- function(seurat_obj,
+                             assay_specific = TRUE,
+                             assay_var = "assay",
+                             shared_hvg,
+                             n_dim = 30
+) {
+  if (assay_specific) {
+    seurat_obj <- seurat_obj %>%
+      ScaleData(features = shared_hvg) %>%
+      RunPCA(features = shared_hvg) %>%
+      RunHarmony(group.by.vars = assay_var, reduction = "pca", dims = 1:n_dim)
+  } else {
+    seurat_obj <- seurat_obj %>%
+      ScaleData() %>%
+      RunPCA()
+  }
+  
+  seurat_obj
+}
+
