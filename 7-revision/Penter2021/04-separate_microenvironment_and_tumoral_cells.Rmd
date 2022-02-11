@@ -110,9 +110,10 @@ seurat <- FindClusters(seurat, resolution = 0.05)
 DimPlot(
   seurat,
   group.by = "sample_id",
-  pt.size = 0.1
-) +
-  scale_color_manual(values = color_palette)
+  pt.size = 0.1,
+  cols = color_palette
+)
+DimPlot(seurat, pt.size = 0.1, cols = color_palette)
 FeaturePlot(seurat, c("CD3D", "CD79A", "LYZ", "NKG7"))
 FeaturePlot(seurat, c("HBB", "TOP2A", "PPBP"))
 FeaturePlot(seurat, "TCF4")
@@ -152,9 +153,10 @@ seurat <- process_seurat(seurat)
 DimPlot(
   seurat,
   group.by = "sample_id",
-  pt.size = 0.1
-) +
-  scale_color_manual(values = color_palette)
+  pt.size = 0.1,
+  cols = color_palette
+)
+DimPlot(seurat, pt.size = 0.1, cols = color_palette)
 ```
 
 
