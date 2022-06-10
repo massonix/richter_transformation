@@ -107,7 +107,7 @@ matrix as a csv file. In addition, the associated metadata can be found in the
 
 ### Seurat objects
 
-In this repository we have deposited all the initial, intermediate and final
+In the Zenodo repository we have deposited all the initial, intermediate and final
 [Seurat Objects](https://github.com/mojaveazure/seurat-object)
 as .rds fies. Each object is the output of one of the analysis notebooks (.Rmd) that
 one can find at the GitHub repository associated with this publication
