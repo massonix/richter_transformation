@@ -17,8 +17,10 @@ Here's a full description of the dataset:
 
 ### Dataset description
 
-The scRNA-seq data for this project was sequenced in three different phases, which
-correspond to the three subprojects one can find in the associated metadata:
+The scRNA-seq data for this project was obtained for different patients (ids 12, 19, 63, 365, 3299) that underwent
+chronic lymphoyctic leukemia to Richter transformation. For each patient we have sequential clinical samples: disease,
+progression, treatment, Richter. The scRNA-seq data was sequenced in three different phases, which correspond to the
+three subprojects one can find in the associated metadata:
 
 
 #### Phase I: CLL_52
@@ -152,24 +154,15 @@ You can check the versions of other packages at the "Session Information" sectio
 
 This repository contains 7 different analysis directories:
 
-* 1-cellranger_mapping:
-* 2-QC:
-* 3-clustering_and_annotation:
-* 4-analysis_smart_seq2:
-* 5-clonal_evolution:
-* 6-differential_expression_analysis
-* 7-revision:
+* 1-cellranger_mapping: scripts used to run cellranger in our cluster. It also contains QC metrics for different sequencing runs.
+* 2-QC: quality control notebooks to assess the quality of sequencing and mapping, detect doublets, demultiplex hashtags, and filter poor-quality cells and genes.
+* 3-clustering_and_annotation: we initially integrated all samples from all patients with [Harmony](), which allowed us to separate microenvironment from tumoral cells. Focusing on the latter, we then clustered and annotated all cells from each patient separately.
+* 4-analysis_smart_seq2: notebooks with the full analysis of the Smart-seq2 data for patient 63.
+* 5-clonal_evolution: notebooks that define the RT seed cells, and ensure that they are not artifacts.
+* 6-differential_expression_analysis: differential expression analysis and gene set enrichment analysis between CLL and RT.
+* 7-revision: notebooks to infer CNV and validate our findings with [an external dataset](https://aacrjournals.org/cancerdiscovery/article-abstract/11/12/3048/674669/Longitudinal-Single-Cell-Dynamics-of-Chromatin?redirectedFrom=fulltext).
 
-
-figures_scripts
-The first 3 have a set of similar notebooks, which match the common pre-processing steps of any single-cell expression matrix:
-
-Demultiplexing: classify each cell to its original condition based on the expression of HTO.
-QC and normalization: filter out poor-quality cells and genes and normalize expression counts.
-Dimensionality reduction, clustering and annotation of cell types.
-Each notebook (*.Rmd) has an associated report (*.html). The reports are useful to visualize the results of each section as well as the diagnostic plots that we used to set the thresholds and parameters. For a quick inspection, one can copy the URL of the report in the GitHub & BitBucket HTML Preview (note that side bar and table will not be available with it).
-
-Finally, the figures_scripts directory contains most of the scripts needed to produce the figures as they appear in the paper. The remaining supplementary figures are created either in the notebooks in 4-Revision, or were created by other coauthors.
+The folder "bin" contains functions and variables that are used throughout different scripts. Finally, the folder "figures_and_tables" contains the scripts to generate the different figures derived from these analysis.
 
 
 ## Papers
