@@ -1,18 +1,23 @@
 # Early seeding of future Richter transformation in chronic lymphocytic leukemia: scRNA-seq analysis
 
-This repository contains all the scripts, notebooks and reports to reproduce the scRNA-seq analysis of our paper "Early seeding of future Richter transformation in chronic lymphocytic leukemia", published in Nature Medicine in 2022. Here, we describe how to access the data, the most important packages and versions used, and how to navigate the directories and files in this repository.
+Richter transformation (RT) is a paradigmatic evolution of chronic lymphocytic leukemia (CLL) into a very aggressive large B-cell lymphoma conferring a dismal prognosis. The mechanisms driving RT remain largely unknown. We have characterized the whole genome, epigenome and transcriptome, combined with single-cell DNA/RNA sequencing analyses and functional experiments, of 19 CLL developing RT. Studying 54 longitudinal samples covering up to 19 years of disease course, we uncovered minute subclones carrying genomic, immunogenetic, and transcriptomic features of RT-cells already at CLL diagnosis, which were dormant for up to 19 years before transformation. We also identified new driver alterations, discovered a novel mutational signature (SBS-RT), recognized an oxidative phosphorylation (OXPHOS)high-B-cell receptor signaling (BCR)low transcriptional axis in RT, and showed that OXPHOS inhibition reduces the proliferation of RT cells. These findings demonstrate the early seeding of subclones driving advanced stages of cancer evolution and uncover therapeutic targets for the, once expanded, lethal RT.
+
+
+This repository contains all the scripts, notebooks and reports to reproduce the scRNA-seq analysis of our paper "Early seeding of future Richter transformation in chronic lymphocytic leukemia", published in Nature Medicine in 2022. Here, we describe how to access the data, document the most important packages and versions used, and explain how to navigate the directories and files in this repository.
 
 
 ## Data
 
 We have deposited the expression matrices, Seurat objects and metadata in Zenodo. You can download them following this link: [https://doi.org/10.5281/zenodo.6631966](https://doi.org/10.5281/zenodo.6631966), or executing the following commands in the
-terminal line:
+command line:
 
 ```{bash}
-TODO
+wget https://zenodo.org/record/6631966/files/Nadeu2022_scRNAseq.zip
+unzip Nadeu2022_scRNAseq.zip
+cd Nadeu2022_scRNAseq
 ```
 
-Here's a full description of the dataset:
+The "Nadeu2022_scRNAseq" data directory comes with its own README.md, which give a full description of the dataset. To ease things, we also provide it here:
 
 
 ### Dataset description
