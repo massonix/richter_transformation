@@ -1,0 +1,130 @@
+---
+title: 'Demonstrate that RT seeds are not doublets'
+author: "Ramon Massoni-Badosa"
+date: "`r Sys.Date()`"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%", fig.align='center', 
+                      message=FALSE, warning = FALSE)
+options(width = 1200)
+```
+
+
+# Introduction
+
+The aim of this notebook is to demonstrate that the Richter Transformation (RT) seeds found in [our original study](https://www.nature.com/articles/s41591-022-01927-8) are not doublets between RT and CLL cells. To do so, we will leverage the ground-truth doublets that we discarded using [cell hashing](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-018-1603-1). Specifically, we will perform dimensionality reduction with our original high-quality singlets + the annotated RT-CLL doublets. If the RT seeds are indeed singlets, they will cluster with the RT cells and not with the doublets.
+
+
+# Pre-processing
+
+## Load packages
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(glue)
+library(patchwork)
+library(ggbeeswarm)
+```
+
+## Read data
+
+We downloaded the data from [Zenodo](https://zenodo.org/records/6631966):
+
+```{r}
+selected_gem <- c("r65huxjg_g0itbe2k", "bco1we6n_qaz6s7wd")
+se_doublets <- map(glue("~/Desktop/NadeuNatMed/Nadeu2022_NatMed_scRNAseq_data/seurat_objects/demultiplexed/seurat_{selected_gem}_demultiplexed.rds"), readRDS)
+se_12 <- readRDS("~/Desktop/NadeuNatMed/Nadeu2022_NatMed_scRNAseq_data/seurat_objects/6.seurat_annotated_12.rds")
+```
+
+
+## Filter doublets
+
+```{r}
+richter_id <- "ICGC-012-19-4600B"
+se_l <- map(se_doublets, \(se_obj) {
+    is_doublet <- se_obj$HTO_classification.global == "Doublet"
+    filt <- (is_doublet & se_obj$HTO_maxID == richter_id) | (is_doublet & se_obj$HTO_secondID == richter_id) | colnames(se_obj) %in% colnames(se_12)
+    se_obj <- se_obj[, filt]
+    se_obj
+})
+se <- merge(se_l[[1]], se_l[[2]])
+```
+
+
+# Dimensionality reduction
+
+```{r}
+se <- se %>%
+    NormalizeData() %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    RunUMAP(dims = 1:20, reduction = "pca")
+DimPlot(se) | DimPlot(se, group.by = "HTO_classification.global") 
+```
+
+
+Let us include the annotation:
+
+```{r}
+se$annotation_final <- "NA"
+annotation_final <- as.character(se_12$annotation_final)
+se$annotation_final[names((se_12$annotation_final))] <- annotation_final
+se$is_richter <- "NA"
+se$is_richter[names((se_12$is_richter))] <- as.character(se_12$is_richter)
+DimPlot(se, group.by = "annotation_final")
+se$classification <- case_when(
+    se$annotation_final %in% c("CXCR4hiCD27lo", "CXCR4loCD27hi", "MIR155HGhi", "MZB1hiIGHMhiXBP1hi") ~ "CLL",
+    se$annotation_final %in% c("CCND2hi RT", "CCND2lo RT", "RT proliferative") & se$is_richter == "TRUE" ~ "RT",
+    se$annotation_final %in% c("CCND2hi RT", "CCND2lo RT", "RT proliferative") & se$is_richter == "FALSE" ~ "RT seeds",
+    TRUE ~ "Doublets"
+)
+colors_classification <- c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3")
+p <- DimPlot(se, group.by = "classification", cols = colors_classification) | DimPlot(se, group.by = "classification", cells.highlight = colnames(se)[se$classification == "RT seeds"])
+p <- p &
+    theme(axis.text = element_blank(),
+          axis.title = element_blank(),
+          axis.line = element_blank(),
+          axis.ticks = element_blank(),
+         )
+p[[1]] <- p[[1]] + theme(plot.title = element_blank())
+p[[2]] <- p[[2]] + ggtitle("Highlighted: RT seeds") + theme(legend.position = "none")
+p
+```
+
+
+# Check HTO expression
+
+As we can see, the RT seeds cluster with the RT cluster and not with the doublets. As a second control, let us assess the expression of hashtag oligonucleotides across groups. We start with the hashtag that identifies the RT timepoint:
+
+
+```{r}
+se@meta.data %>%
+    mutate(
+        RT_HTO = se[["HTO"]]@data[richter_id, ],
+        classification = factor(classification, c("CLL", "RT", "RT seeds", "Doublets"))
+    ) %>%
+    ggplot(aes(classification, RT_HTO, color = classification)) +
+      geom_quasirandom() +
+      ylab("HTO Expression (RT timepoint)") +
+      scale_color_manual(values = colors_classification) +
+      theme_bw() +
+      theme(axis.title.x = element_blank(), legend.position = "none")
+
+```
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
